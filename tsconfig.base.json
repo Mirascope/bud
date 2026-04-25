@@ -9,6 +9,8 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "verbatimModuleSyntax": true,
     "noUncheckedIndexedAccess": true
   }
