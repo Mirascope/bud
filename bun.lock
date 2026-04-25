@@ -1,0 +1,16 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "@mirascope/bud",
+    },
+    "packages/llm": {
+      "name": "@bud/llm",
+      "version": "0.0.0",
+    },
+  },
+  "packages": {
+    "@bud/llm": ["@bud/llm@workspace:packages/llm"],
+  }
+}
