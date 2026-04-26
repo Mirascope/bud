@@ -4,6 +4,7 @@ export * from "./tools/index.ts";
 export * from "./responses/index.ts";
 export * from "./providers/index.ts";
 export * from "./pricing/index.ts";
+export * from "./model-info/index.ts";
 export * from "./image/index.ts";
 
 export {
