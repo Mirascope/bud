@@ -16,6 +16,7 @@ export const TokenUsageSchema = Schema.Struct({
   cacheRead: Schema.Number,
   cacheWrite: Schema.Number,
   reasoning: Schema.optionalWith(Schema.Number, { default: () => 0 }),
+  costCenticents: Schema.optionalWith(Schema.Number, { default: () => 0 }),
 });
 export type TokenUsage = typeof TokenUsageSchema.Type;
 
@@ -24,6 +25,7 @@ export const UsageSchema = Schema.Struct({
   tools: Schema.optionalWith(Schema.Array(ToolUsageSchema), {
     default: () => [],
   }),
+  costCenticents: Schema.optionalWith(Schema.Number, { default: () => 0 }),
 });
 export type Usage = typeof UsageSchema.Type;
 
@@ -35,6 +37,7 @@ export function createUsage(
   options: {
     tokens?: Partial<TokenUsage>;
     tools?: ToolUsage[];
+    costCenticents?: number;
   } = {},
 ): Usage {
   return {
@@ -44,8 +47,10 @@ export function createUsage(
       cacheRead: options.tokens?.cacheRead ?? 0,
       cacheWrite: options.tokens?.cacheWrite ?? 0,
       reasoning: options.tokens?.reasoning ?? 0,
+      costCenticents: options.tokens?.costCenticents ?? 0,
     },
     tools: options.tools ?? [],
+    costCenticents: options.costCenticents ?? 0,
   };
 }
 

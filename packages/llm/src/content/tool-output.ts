@@ -17,8 +17,10 @@ export const ZERO_USAGE: Usage = {
     cacheRead: 0,
     cacheWrite: 0,
     reasoning: 0,
+    costCenticents: 0,
   },
   tools: [],
+  costCenticents: 0,
 };
 
 export const ToolOutput = Schema.Struct({

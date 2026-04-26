@@ -1,6 +1,7 @@
 /**
  * Content types for LLM messages.
  */
+import { Audio } from "./audio.ts";
 import { Document } from "./document.ts";
 import { Image } from "./image.ts";
 import { Text } from "./text.ts";
@@ -11,7 +12,13 @@ import { Schema } from "effect";
 
 // Content part unions
 
-export const UserContentPart = Schema.Union(Text, Image, Document, ToolOutput);
+export const UserContentPart = Schema.Union(
+  Text,
+  Image,
+  Audio,
+  Document,
+  ToolOutput,
+);
 export type UserContentPart = typeof UserContentPart.Type;
 
 export const AssistantContentPart = Schema.Union(Text, ToolCall, Thought);
@@ -20,6 +27,7 @@ export type AssistantContentPart = typeof AssistantContentPart.Type;
 export const ContentPart = Schema.Union(
   Text,
   Image,
+  Audio,
   Document,
   ToolOutput,
   ToolCall,
@@ -36,6 +44,7 @@ export {
   type Base64ImageSource,
   type URLImageSource,
 } from "./image.ts";
+export { Audio, type AudioMimeType, type Base64AudioSource } from "./audio.ts";
 export {
   Document,
   type DocumentTextMimeType,
@@ -55,6 +64,7 @@ export {
   uint8ArrayToBase64,
   inferImageType,
 } from "./image.ts";
+export { audioFromBytes, inferAudioType } from "./audio.ts";
 export {
   documentFromUrl,
   documentFromBytes,
