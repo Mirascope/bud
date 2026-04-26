@@ -32,13 +32,22 @@ export const Base64AudioSource = Schema.Struct({
 });
 export type Base64AudioSource = typeof Base64AudioSource.Type;
 
+export const ObjectStorageAudioSource = Schema.Struct({
+  type: Schema.Literal("object_storage_audio_source"),
+  /** Object storage key for the audio bytes. */
+  key: Schema.String,
+  /** The MIME type of the audio. */
+  mimeType: AudioMimeType,
+});
+export type ObjectStorageAudioSource = typeof ObjectStorageAudioSource.Type;
+
 // ---------------------------------------------------------------------------
 // Audio content part
 // ---------------------------------------------------------------------------
 
 export const Audio = Schema.Struct({
   type: Schema.Literal("audio"),
-  source: Base64AudioSource,
+  source: Schema.Union(Base64AudioSource, ObjectStorageAudioSource),
 });
 export type Audio = typeof Audio.Type;
 

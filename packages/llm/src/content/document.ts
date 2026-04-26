@@ -56,10 +56,21 @@ export const URLDocumentSource = Schema.Struct({
 });
 export type URLDocumentSource = typeof URLDocumentSource.Type;
 
+export const ObjectStorageDocumentSource = Schema.Struct({
+  type: Schema.Literal("object_storage_document_source"),
+  /** Object storage key for the document bytes. */
+  key: Schema.String,
+  /** The media type of the document. */
+  mediaType: DocumentBase64MimeType,
+});
+export type ObjectStorageDocumentSource =
+  typeof ObjectStorageDocumentSource.Type;
+
 export const DocumentSource = Schema.Union(
   Base64DocumentSource,
   TextDocumentSource,
   URLDocumentSource,
+  ObjectStorageDocumentSource,
 );
 export type DocumentSource = typeof DocumentSource.Type;
 

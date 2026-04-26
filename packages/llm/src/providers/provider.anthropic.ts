@@ -162,6 +162,9 @@ function encodeImage(image: Image): AnthropicRequestContentBlock {
       },
     };
   }
+  if (image.source.type === "object_storage_image_source") {
+    throw new Error("Object storage image sources must be resolved first");
+  }
   return {
     type: "image",
     source: { type: "url", url: image.source.url },
@@ -193,6 +196,8 @@ function encodeDocument(document: Document): AnthropicRequestContentBlock {
         type: "document",
         source: { type: "url", url: document.source.url },
       };
+    case "object_storage_document_source":
+      throw new Error("Object storage document sources must be resolved first");
   }
 }
 

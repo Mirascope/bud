@@ -8,6 +8,6 @@
   "trailingComma": "all",
   "experimentalSortImports": {},
   "ignorePatterns": [
-    "routeTree.gen.ts"
+    "**/routeTree.gen.ts"
   ]
 }

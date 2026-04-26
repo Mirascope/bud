@@ -40,7 +40,20 @@ export const URLImageSource = Schema.Struct({
 });
 export type URLImageSource = typeof URLImageSource.Type;
 
-export const ImageSource = Schema.Union(Base64ImageSource, URLImageSource);
+export const ObjectStorageImageSource = Schema.Struct({
+  type: Schema.Literal("object_storage_image_source"),
+  /** Object storage key for the image bytes. */
+  key: Schema.String,
+  /** The MIME type of the image. */
+  mimeType: ImageMimeType,
+});
+export type ObjectStorageImageSource = typeof ObjectStorageImageSource.Type;
+
+export const ImageSource = Schema.Union(
+  Base64ImageSource,
+  URLImageSource,
+  ObjectStorageImageSource,
+);
 export type ImageSource = typeof ImageSource.Type;
 
 // ---------------------------------------------------------------------------

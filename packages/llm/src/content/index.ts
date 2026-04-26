@@ -43,8 +43,14 @@ export {
   type ImageMimeType,
   type Base64ImageSource,
   type URLImageSource,
+  type ObjectStorageImageSource,
 } from "./image.ts";
-export { Audio, type AudioMimeType, type Base64AudioSource } from "./audio.ts";
+export {
+  Audio,
+  type AudioMimeType,
+  type Base64AudioSource,
+  type ObjectStorageAudioSource,
+} from "./audio.ts";
 export {
   Document,
   type DocumentTextMimeType,
@@ -52,6 +58,7 @@ export {
   type Base64DocumentSource,
   type TextDocumentSource,
   type URLDocumentSource,
+  type ObjectStorageDocumentSource,
 } from "./document.ts";
 export { Thought } from "./thought.ts";
 export { ToolCall } from "./tool-call.ts";
