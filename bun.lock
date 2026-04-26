@@ -26,6 +26,9 @@
       "dependencies": {
         "effect": "^3.19.18",
       },
+      "devDependencies": {
+        "@bud/testing": "workspace:*",
+      },
     },
     "packages/sessions": {
       "name": "@bud/sessions",
@@ -35,6 +38,16 @@
         "effect": "^3.19.18",
       },
     },
+    "packages/testing": {
+      "name": "@bud/testing",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.3.9",
+      },
+      "peerDependencies": {
+        "effect": "^3.19.0",
+      },
+    },
   },
   "packages": {
     "@bud/agent": ["@bud/agent@workspace:packages/agent"],
@@ -42,6 +55,8 @@
     "@bud/llm": ["@bud/llm@workspace:packages/llm"],
 
     "@bud/sessions": ["@bud/sessions@workspace:packages/sessions"],
+
+    "@bud/testing": ["@bud/testing@workspace:packages/testing"],
 
     "@oxfmt/darwin-arm64": ["@oxfmt/darwin-arm64@0.7.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-By831Cju71Etl3VetSrL1DrYcUwYIaKlOt0Icss5zUBUMGy8g2/C6iImVTpccDkPDJEsr1N67adhGqUHisBxqA=="],
 

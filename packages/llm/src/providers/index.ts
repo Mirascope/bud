@@ -13,3 +13,10 @@ export {
   type ProviderRegistryService,
   type ProviderEntry,
 } from "./registry.ts";
+
+export {
+  AnthropicProvider,
+  buildAnthropicRequestBody,
+  makeAnthropicProvider,
+  type AnthropicProviderOptions,
+} from "./provider.anthropic.ts";

@@ -15,5 +15,8 @@
   },
   "dependencies": {
     "effect": "^3.19.18"
+  },
+  "devDependencies": {
+    "@bud/testing": "workspace:*"
   }
 }
