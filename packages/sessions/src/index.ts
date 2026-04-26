@@ -7,6 +7,7 @@ export {
   type SessionEntry,
   type ModelUpdate,
   type SystemPromptChange,
+  type ThinkingLevel,
   PromptSnapshot,
   PromptSnapshotResponse,
   Scope,
