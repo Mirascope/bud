@@ -6,6 +6,7 @@ dist/
 build/
 .output/
 .vite/
+routeTree.gen.ts
 
 # Test and coverage output
 coverage/

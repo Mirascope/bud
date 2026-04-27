@@ -1,5 +1,5 @@
 {
-  "name": "@bud/agent",
+  "name": "@bud/computer",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,12 +9,11 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@bud/llm": "workspace:*",
-    "@bud/sessions": "workspace:*",
+    "@effect/cli": "^0.73.2",
+    "@effect/platform": "^0.94.5",
     "effect": "^3.19.18"
   },
   "devDependencies": {
-    "@bud/object-storage": "workspace:*",
     "@bud/testing": "workspace:*"
   }
 }

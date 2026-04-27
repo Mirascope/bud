@@ -1,3 +1,4 @@
+import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
@@ -10,5 +11,5 @@ export default defineConfig({
       "@demo": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
-  plugins: [tanstackStart(), react()],
+  plugins: [tanstackStart(), react(), tailwindcss()],
 });
