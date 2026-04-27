@@ -1,5 +1,5 @@
 {
-  "name": "@bud/llm",
+  "name": "@bud/bud",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,14 +7,14 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./content": "./src/content/index.ts",
-    "./messages": "./src/messages/index.ts",
-    "./tools": "./src/tools/index.ts",
-    "./responses": "./src/responses/index.ts",
-    "./providers": "./src/providers/index.ts"
+    "./browser": "./src/browser.ts"
   },
   "dependencies": {
-    "@mlc-ai/web-llm": "^0.2.82",
+    "@bud/agent": "workspace:*",
+    "@bud/computer": "workspace:*",
+    "@bud/llm": "workspace:*",
+    "@bud/object-storage": "workspace:*",
+    "@bud/sessions": "workspace:*",
     "effect": "^3.19.18"
   },
   "devDependencies": {

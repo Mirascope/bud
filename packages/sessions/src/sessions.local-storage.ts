@@ -75,6 +75,18 @@ function parseJson<T>(bytes: Uint8Array): T {
   return JSON.parse(new TextDecoder().decode(bytes)) as T;
 }
 
+function responseData(response: LLM.Response): LLM.ResponseData {
+  return new LLM.ResponseData({
+    content: [...response.content],
+    usage: response.usage,
+    finishReason: response.finishReason,
+    providerId: response.providerId,
+    modelId: response.modelId,
+    providerModelName: response.providerModelName,
+    rawMessage: response.rawMessage,
+  });
+}
+
 function entryTimestamp(entry: SessionEntry): string {
   return "timestamp" in entry ? entry.timestamp : "";
 }
@@ -198,18 +210,23 @@ export function makeSessionsLocalStorage(
     key: string,
     value: unknown,
   ): Effect.Effect<void, SessionError> {
-    return objectStorage
-      .putObject({
+    return Effect.gen(function* () {
+      const body = yield* Effect.try({
+        try: () => jsonBytes(value),
+        catch: (cause) =>
+          sessionFailure("Unable to serialize stored object", undefined, cause),
+      });
+      yield* objectStorage.putObject({
         key,
-        body: jsonBytes(value),
+        body,
         contentType: JSON_CONTENT_TYPE,
-      })
-      .pipe(
-        Effect.asVoid,
-        Effect.mapError((cause) =>
-          sessionFailure("Unable to write stored object", undefined, cause),
-        ),
-      );
+      });
+    }).pipe(
+      Effect.asVoid,
+      Effect.mapError((cause) =>
+        sessionFailure("Unable to write stored object", undefined, cause),
+      ),
+    );
   }
 
   const readIndex = (): Effect.Effect<SessionId[], SessionError> =>
@@ -707,7 +724,7 @@ export function makeSessionsLocalStorage(
       mutateSession(sessionId, (session) => {
         const entry: AssistantTurn = {
           type: "assistant_turn",
-          response,
+          response: responseData(response),
           timestamp: now(),
         };
         activeSegment(session).entries.push(entry);

@@ -15,6 +15,7 @@ export const Route = createRootRoute({
       { title: "Bud Demo" },
       { name: "description", content: "Bud demo application." },
     ],
+    links: [{ rel: "icon", href: "/favicon.svg", type: "image/svg+xml" }],
   }),
   component: RootComponent,
 });

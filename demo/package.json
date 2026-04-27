@@ -10,6 +10,7 @@
     "typecheck": "tsr generate && tsc --noEmit"
   },
   "dependencies": {
+    "@bud/bud": "workspace:*",
     "@bud/crypto": "workspace:*",
     "@bud/llm": "workspace:*",
     "@bud/object-storage": "workspace:*",

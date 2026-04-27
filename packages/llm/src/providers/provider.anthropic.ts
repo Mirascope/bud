@@ -335,6 +335,8 @@ export function buildAnthropicRequestBody(args: ProviderCallArgs): unknown {
     if (budget === 0) {
       body.thinking = { type: "disabled" };
     } else if (budget > 0) {
+      body.temperature = 1;
+      body.max_tokens = Math.max(maxTokens, budget + 1);
       body.thinking = { type: "enabled", budget_tokens: budget };
     }
   }

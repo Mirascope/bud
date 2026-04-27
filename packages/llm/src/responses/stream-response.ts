@@ -29,6 +29,11 @@ interface ChunkState {
   reasoningTokens: number;
 }
 
+type ContentStreamQueueItem =
+  | { readonly type: "content"; readonly stream: ContentStream }
+  | { readonly type: "error"; readonly error: ProviderError }
+  | { readonly type: "done" };
+
 // ---------------------------------------------------------------------------
 // StreamResponseInit
 // ---------------------------------------------------------------------------
@@ -130,12 +135,20 @@ export class StreamResponse extends Response {
   streams(): Stream.Stream<ContentStream, ProviderError> {
     return Stream.unwrap(
       Effect.gen(this, function* () {
-        const outerQueue = yield* Queue.unbounded<ContentStream | null>();
+        const outerQueue = yield* Queue.unbounded<ContentStreamQueueItem>();
 
         yield* Effect.fork(
           Effect.gen(this, function* () {
             let innerQueue: Queue.Queue<string | null> | null = null;
             let currentContentStream: ContentStream | null = null;
+
+            const closeInnerQueue = Effect.gen(function* () {
+              if (innerQueue) {
+                yield* Queue.offer(innerQueue, null);
+                innerQueue = null;
+                currentContentStream = null;
+              }
+            });
 
             yield* Stream.runForEach(this.stream, (chunk) =>
               Effect.gen(this, function* () {
@@ -148,7 +161,10 @@ export class StreamResponse extends Response {
                       Stream.takeWhile((v): v is string => v !== null),
                     );
                     currentContentStream = new TextContentStream(deltaStream);
-                    yield* Queue.offer(outerQueue, currentContentStream);
+                    yield* Queue.offer(outerQueue, {
+                      type: "content",
+                      stream: currentContentStream,
+                    });
                     break;
                   }
                   case "text_chunk":
@@ -158,11 +174,7 @@ export class StreamResponse extends Response {
                     }
                     break;
                   case "text_end_chunk":
-                    if (innerQueue) {
-                      yield* Queue.offer(innerQueue, null);
-                      innerQueue = null;
-                      currentContentStream = null;
-                    }
+                    yield* closeInnerQueue;
                     break;
 
                   case "thought_start_chunk": {
@@ -173,7 +185,10 @@ export class StreamResponse extends Response {
                     currentContentStream = new ThoughtContentStream(
                       deltaStream,
                     );
-                    yield* Queue.offer(outerQueue, currentContentStream);
+                    yield* Queue.offer(outerQueue, {
+                      type: "content",
+                      stream: currentContentStream,
+                    });
                     break;
                   }
                   case "thought_chunk":
@@ -186,11 +201,7 @@ export class StreamResponse extends Response {
                     }
                     break;
                   case "thought_end_chunk":
-                    if (innerQueue) {
-                      yield* Queue.offer(innerQueue, null);
-                      innerQueue = null;
-                      currentContentStream = null;
-                    }
+                    yield* closeInnerQueue;
                     break;
 
                   case "tool_call_start_chunk": {
@@ -203,7 +214,10 @@ export class StreamResponse extends Response {
                       chunk.name,
                       deltaStream,
                     );
-                    yield* Queue.offer(outerQueue, currentContentStream);
+                    yield* Queue.offer(outerQueue, {
+                      type: "content",
+                      stream: currentContentStream,
+                    });
                     break;
                   }
                   case "tool_call_chunk":
@@ -216,30 +230,41 @@ export class StreamResponse extends Response {
                     }
                     break;
                   case "tool_call_end_chunk":
-                    if (innerQueue) {
-                      yield* Queue.offer(innerQueue, null);
-                      innerQueue = null;
-                      currentContentStream = null;
-                    }
+                    yield* closeInnerQueue;
                     break;
 
                   default:
                     break;
                 }
               }),
+            ).pipe(
+              Effect.tap(() => Effect.sync(() => this._finalize())),
+              Effect.catchAll((error) =>
+                Queue.offer(outerQueue, { type: "error", error }),
+              ),
+              Effect.ensuring(
+                Effect.gen(function* () {
+                  yield* closeInnerQueue;
+                  yield* Queue.offer(outerQueue, { type: "done" });
+                }),
+              ),
             );
-
-            if (innerQueue) {
-              yield* Queue.offer(innerQueue, null);
-            }
-            this._finalize();
-            yield* Queue.offer(outerQueue, null);
           }),
         );
 
         return Stream.fromQueue(outerQueue).pipe(
-          Stream.takeWhile((v): v is ContentStream => v !== null),
-          Stream.ensuring(Effect.void),
+          Stream.takeWhile((item) => item.type !== "done"),
+          Stream.mapEffect((item) => {
+            if (item.type === "content") return Effect.succeed(item.stream);
+            if (item.type === "error") return Effect.fail(item.error);
+            return Effect.fail(
+              new ProviderError({
+                message: "Unexpected end of content stream.",
+                providerId: this.providerId,
+                kind: "unknown",
+              }),
+            );
+          }),
         );
       }),
     );

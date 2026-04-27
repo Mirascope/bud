@@ -50,12 +50,12 @@ import {
 } from "./provider.schemas.ts";
 import { Effect, Layer, Stream } from "effect";
 
-type OpenAIChatContentPart =
+export type OpenAIChatContentPart =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } }
   | { type: "file"; file: { file_data?: string; filename?: string } };
 
-type OpenAIChatMessage =
+export type OpenAIChatMessage =
   | {
       role: "system" | "user" | "assistant";
       content?: string | OpenAIChatContentPart[];
@@ -63,13 +63,13 @@ type OpenAIChatMessage =
     }
   | { role: "tool"; tool_call_id: string; content: string };
 
-interface OpenAIChatToolCall {
+export interface OpenAIChatToolCall {
   readonly id: string;
   readonly type: "function";
   readonly function: { readonly name: string; readonly arguments: string };
 }
 
-interface OpenAIChatResponse {
+export interface OpenAIChatResponse {
   readonly id: string;
   readonly model: string;
   readonly choices: Array<{
@@ -83,7 +83,7 @@ interface OpenAIChatResponse {
   readonly usage?: OpenAIUsage;
 }
 
-interface OpenAIChatStreamEvent {
+export interface OpenAIChatStreamEvent {
   readonly choices?: Array<{
     readonly delta?: {
       readonly content?: string | null;
@@ -293,16 +293,17 @@ function decodeContent(response: OpenAIChatResponse): AssistantContentPart[] {
   return parts;
 }
 
-function decodeResponse(
+export function decodeOpenAIChatCompletionsResponse(
   response: OpenAIChatResponse,
   args: ProviderCallArgs,
+  providerId: string = OPENAI_PROVIDER_ID,
 ): LlmResponse {
   return new LlmResponse({
     content: decodeContent(response),
     usage: decodeUsage(response.usage),
     finishReason: decodeFinishReason(response.choices[0]?.finish_reason),
     rawMessage: response.choices[0]?.message ?? response,
-    providerId: OPENAI_PROVIDER_ID,
+    providerId,
     modelId: args.modelId,
     providerModelName: response.model ?? stripProviderPrefix(args.modelId),
     inputMessages: [...args.messages],
@@ -347,8 +348,13 @@ async function fetchOpenAIChatCompletions(
   return response;
 }
 
-async function* decodeStream(
+export interface DecodeOpenAIChatCompletionsStreamOptions {
+  readonly closeOnFinishReason?: boolean;
+}
+
+export async function* decodeOpenAIChatCompletionsStream(
   events: AsyncIterable<OpenAIChatStreamEvent>,
+  options: DecodeOpenAIChatCompletionsStreamOptions = {},
 ): AsyncGenerator<StreamResponseChunk> {
   const toolCalls = new Map<
     number,
@@ -357,8 +363,20 @@ async function* decodeStream(
   let textOpen = false;
   let text = "";
   const rawToolCalls: OpenAIChatToolCall[] = [];
+  const emitRawMessage = function* (): Generator<StreamResponseChunk> {
+    yield rawMessageChunk({
+      role: "assistant",
+      content: text || null,
+      tool_calls: rawToolCalls.length > 0 ? rawToolCalls : undefined,
+    });
+  };
 
-  for await (const event of events) {
+  const iterator = events[Symbol.asyncIterator]();
+  while (true) {
+    const item = await iterator.next();
+    if (item.done) break;
+    const event = item.value;
+
     yield rawStreamEventChunk(event);
     if (event.usage) {
       yield usageDeltaChunk({
@@ -412,14 +430,14 @@ async function* decodeStream(
         yield toolCallEnd(state.id);
       }
       yield finishReasonChunk(decodeFinishReason(choice.finish_reason));
+      if (options.closeOnFinishReason) {
+        yield* emitRawMessage();
+        return;
+      }
     }
   }
 
-  yield rawMessageChunk({
-    role: "assistant",
-    content: text || null,
-    tool_calls: rawToolCalls.length > 0 ? rawToolCalls : undefined,
-  });
+  yield* emitRawMessage();
 }
 
 export function makeOpenAIChatCompletionsProvider(
@@ -443,7 +461,7 @@ export function makeOpenAIChatCompletionsProvider(
             args,
             false,
           );
-          return decodeResponse(
+          return decodeOpenAIChatCompletionsResponse(
             (await response.json()) as OpenAIChatResponse,
             args,
           );
@@ -465,7 +483,7 @@ export function makeOpenAIChatCompletionsProvider(
               true,
             );
             return Stream.fromAsyncIterable(
-              decodeStream(
+              decodeOpenAIChatCompletionsStream(
                 parseOpenAISseEvents<OpenAIChatStreamEvent>(response),
               ),
               wrapOpenAIUnknownError,
