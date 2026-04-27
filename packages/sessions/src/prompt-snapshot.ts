@@ -1,5 +1,6 @@
 import type { PromptSnapshot } from "./sessions.schemas.ts";
-import { createHash } from "node:crypto";
+import type { CryptoService } from "@bud/crypto";
+import { Effect } from "effect";
 
 type ToolInput = {
   readonly name: string;
@@ -22,6 +23,9 @@ export function normalize(
   return { systemPrompt, tools: sortedTools };
 }
 
-export function hashPromptSnapshot(snapshot: PromptSnapshot): string {
-  return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
+export function hashPromptSnapshot(
+  snapshot: PromptSnapshot,
+  crypto: CryptoService,
+) {
+  return crypto.sha256Hex(JSON.stringify(snapshot)).pipe(Effect.orDie);
 }

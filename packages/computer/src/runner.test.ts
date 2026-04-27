@@ -260,3 +260,69 @@ it.effect("runs bash through terminal methods", () =>
     });
   }).pipe(Effect.provide(layer())),
 );
+
+it.effect("renders root help with command summaries", () =>
+  Effect.gen(function* () {
+    const output = yield* runComputerCli("computer --help");
+
+    expect(output).toMatchInlineSnapshot(`
+"computer
+
+Workspace file and terminal operations.
+
+Run 'computer <command> --help' for details.
+
+COMMANDS
+
+  list            List files in the workspace.
+  stat            Get file or directory metadata.
+  read            Read a file from the workspace.
+  write           Write a file in the workspace.
+  edit            Replace text in a file.
+  remove          Remove a file or directory.
+  bash            Run a shell command through the terminal.
+  terminal-start  Start an interactive terminal session.
+  terminal-write  Write input to an interactive terminal.
+  terminal-read   Read buffered terminal output.
+  terminal-kill   Kill an interactive terminal."
+`);
+  }).pipe(Effect.provide(layer())),
+);
+
+it.effect("renders leaf help for subcommands", () =>
+  Effect.gen(function* () {
+    const output = yield* runComputerCli("computer read --help");
+
+    expect(output).toMatchInlineSnapshot(`
+"computer read
+
+Read a file from the workspace.
+
+USAGE
+
+  computer read <path> [--encoding utf8 | base64] [--offset integer] [--limit integer]
+
+ARGUMENTS
+
+  path
+
+OPTIONS
+
+  --encoding utf8 | base64    File encoding, optional
+  --offset integer            1-based line number to start reading from, optional
+  --limit integer             Maximum number of lines to read, optional"
+`);
+  }).pipe(Effect.provide(layer())),
+);
+
+it.effect("renders unknown command help with available commands", () =>
+  Effect.gen(function* () {
+    const output = yield* runComputerCli("computer help missing");
+
+    expect(output).toMatchInlineSnapshot(`
+"Unknown command: missing
+
+Available commands: list, stat, read, write, edit, remove, bash, terminal-start, terminal-write, terminal-read, terminal-kill"
+`);
+  }).pipe(Effect.provide(layer())),
+);

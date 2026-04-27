@@ -15,10 +15,15 @@
       "name": "@bud/demo",
       "version": "0.0.0",
       "dependencies": {
+        "@bud/crypto": "workspace:*",
+        "@bud/llm": "workspace:*",
+        "@bud/object-storage": "workspace:*",
+        "@bud/sessions": "workspace:*",
         "@tanstack/react-router": "^1.168.0",
         "@tanstack/react-start": "^1.167.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "effect": "^3.19.18",
         "lucide-react": "^0.577.0",
         "react": "^19.2.3",
         "react-dom": "^19.2.3",
@@ -40,6 +45,7 @@
       "name": "@bud/agent",
       "version": "0.0.0",
       "dependencies": {
+        "@bud/computer": "workspace:*",
         "@bud/llm": "workspace:*",
         "@bud/sessions": "workspace:*",
         "effect": "^3.19.18",
@@ -59,6 +65,13 @@
       },
       "devDependencies": {
         "@bud/testing": "workspace:*",
+      },
+    },
+    "packages/crypto": {
+      "name": "@bud/crypto",
+      "version": "0.0.0",
+      "dependencies": {
+        "effect": "^3.19.18",
       },
     },
     "packages/llm": {
@@ -82,6 +95,7 @@
       "name": "@bud/sessions",
       "version": "0.0.0",
       "dependencies": {
+        "@bud/crypto": "workspace:*",
         "@bud/llm": "workspace:*",
         "@bud/object-storage": "workspace:*",
         "effect": "^3.19.18",
@@ -147,6 +161,8 @@
     "@bud/agent": ["@bud/agent@workspace:packages/agent"],
 
     "@bud/computer": ["@bud/computer@workspace:packages/computer"],
+
+    "@bud/crypto": ["@bud/crypto@workspace:packages/crypto"],
 
     "@bud/demo": ["@bud/demo@workspace:demo"],
 

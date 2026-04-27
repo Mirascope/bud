@@ -3,6 +3,7 @@ import {
   type FileEncoding,
   type TerminalStartOptions,
 } from "./computer.ts";
+import { makeRootCommandGroup } from "./help.ts";
 import { Args, Command, Options } from "@effect/cli";
 import { Console, Effect, Option } from "effect";
 
@@ -194,29 +195,9 @@ const terminalKillCommand = Command.make(
     }),
 ).pipe(Command.withDescription("Kill an interactive terminal."));
 
-const helpText = [
+export const computerCommand = makeRootCommandGroup(
   "computer",
-  "",
-  "COMMANDS",
-  "",
-  "  list             List files in the workspace",
-  "  stat             Get file or directory metadata",
-  "  read             Read a file",
-  "  write            Write a file",
-  "  edit             Replace text in a file",
-  "  remove           Remove a file or directory",
-  "  bash             Run a shell command through the terminal",
-  "  terminal-start   Start an interactive terminal",
-  "  terminal-write   Write input to a terminal",
-  "  terminal-read    Read terminal output",
-  "  terminal-kill    Kill a terminal",
-].join("\n");
-
-export const computerCommand = Command.make("computer", {}, () =>
-  Console.log(helpText),
-).pipe(
-  Command.withDescription("Workspace file and terminal operations."),
-  Command.withSubcommands([
+  [
     listCommand,
     statCommand,
     readCommand,
@@ -228,5 +209,6 @@ export const computerCommand = Command.make("computer", {}, () =>
     terminalWriteCommand,
     terminalReadCommand,
     terminalKillCommand,
-  ]),
+  ],
+  { description: "Workspace file and terminal operations." },
 );

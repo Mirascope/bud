@@ -81,6 +81,7 @@ const cli = Command.run(computerCommand, {
 export function runComputerCliArgv(
   argv: readonly string[],
 ): Effect.Effect<string, never, Computer> {
+  const normalizedArgv = normalizeHelpArgv(argv);
   return Effect.gen(function* () {
     const buffer = yield* Ref.make<string[]>([]);
     const terminalLayer = makeBufferedTerminalLayer(buffer);
@@ -98,7 +99,7 @@ export function runComputerCliArgv(
 
     try {
       yield* (
-        cli(["node", "computer", ...argv]) as Effect.Effect<
+        cli(["node", "computer", ...normalizedArgv]) as Effect.Effect<
           void,
           unknown,
           Computer
@@ -131,4 +132,11 @@ export function runComputerCli(
   const argv = tokenize(command.trim());
   if (argv[0] === "computer") argv.shift();
   return runComputerCliArgv(argv);
+}
+
+function normalizeHelpArgv(argv: readonly string[]): readonly string[] {
+  const helpIndex = argv.findIndex((arg) => arg === "--help" || arg === "-h");
+  if (helpIndex === -1) return argv;
+
+  return ["help", ...argv.slice(0, helpIndex)];
 }

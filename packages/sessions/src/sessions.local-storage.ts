@@ -30,6 +30,7 @@ import {
   type UserTurn,
   scopeFromSessionId,
 } from "./sessions.schemas.ts";
+import { WebCrypto, type CryptoService } from "@bud/crypto";
 import * as LLM from "@bud/llm";
 import {
   base64ToBytes,
@@ -42,6 +43,7 @@ import { Effect, Layer } from "effect";
 export interface SessionsLocalStorageOptions {
   readonly namespace?: string;
   readonly now?: () => string;
+  readonly crypto?: CryptoService;
 }
 
 interface StoredSegment {
@@ -161,6 +163,7 @@ export function makeSessionsLocalStorage(
 ): SessionsService {
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
   const now = options.now ?? (() => new Date().toISOString());
+  const crypto = options.crypto ?? WebCrypto.make();
 
   const sessionsKey = `${namespace}/sessions/index.json`;
   const sessionKey = (sessionId: string) =>
@@ -675,7 +678,7 @@ export function makeSessionsLocalStorage(
     writePromptSnapshot: (systemPrompt, tools) =>
       Effect.gen(function* () {
         const snapshot = normalizePromptSnapshot(systemPrompt, tools);
-        const hash = hashPromptSnapshot(snapshot);
+        const hash = yield* hashPromptSnapshot(snapshot, crypto);
         yield* writeJson(promptKey(hash), snapshot);
         return { hash, snapshot };
       }),

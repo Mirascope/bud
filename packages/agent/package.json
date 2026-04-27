@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@bud/computer": "workspace:*",
     "@bud/llm": "workspace:*",
     "@bud/sessions": "workspace:*",
     "effect": "^3.19.18"

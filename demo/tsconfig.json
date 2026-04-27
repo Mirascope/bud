@@ -2,9 +2,10 @@
   "extends": "../tsconfig.json",
   "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"],
   "compilerOptions": {
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "paths": {
+      "@bud/*": ["../packages/*/src"],
       "@demo/*": ["./src/*"]
     }
   }

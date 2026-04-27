@@ -12,6 +12,7 @@
     "./exchange": "./src/exchange.ts"
   },
   "dependencies": {
+    "@bud/crypto": "workspace:*",
     "@bud/llm": "workspace:*",
     "@bud/object-storage": "workspace:*",
     "effect": "^3.19.18"

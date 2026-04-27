@@ -1,9 +1,11 @@
+import { WebCrypto } from "@bud/crypto";
 import * as LLM from "@bud/llm";
 import { IndexedDB } from "@bud/object-storage";
 import {
   makeSessionsLocalStorage,
   type SessionId,
   type SessionSummary,
+  type SessionsService,
 } from "@bud/sessions";
 import { Effect } from "effect";
 
@@ -21,17 +23,12 @@ export interface DemoSession {
 
 const MODEL_ID = "demo/not-implemented";
 const ASSISTANT_FALLBACK = "Not Implemented Yet";
+const crypto = WebCrypto.make();
 
-const sessions = makeSessionsLocalStorage(
-  IndexedDB.make({
-    databaseName: "bud-demo",
-    keyPrefix: "demo",
-  }),
-  { namespace: "bud/demo/sessions" },
-);
+let sessions: SessionsService | null = null;
 
 export async function listDemoSessions(): Promise<DemoSession[]> {
-  const summaries = await Effect.runPromise(sessions.summarize("bud"));
+  const summaries = await Effect.runPromise(getSessions().summarize("bud"));
   const withTitles = await Promise.all(
     summaries.map(async (summary) => ({
       sessionId: summary.sessionId as SessionId,
@@ -47,7 +44,7 @@ export async function ensureDemoSession(
   sessionId?: SessionId,
 ): Promise<SessionId> {
   if (sessionId) {
-    await Effect.runPromise(sessions.open(sessionId));
+    await Effect.runPromise(getSessions().open(sessionId));
     return sessionId;
   }
 
@@ -61,7 +58,7 @@ export async function ensureDemoSession(
 export async function createDemoSession(): Promise<SessionId> {
   const sessionId = `bud:demo-${crypto.randomUUID()}` as SessionId;
   await Effect.runPromise(
-    sessions.create({
+    getSessions().create({
       sessionId,
       modelId: MODEL_ID,
     }),
@@ -72,7 +69,7 @@ export async function createDemoSession(): Promise<SessionId> {
 export async function loadDemoMessages(
   sessionId: SessionId,
 ): Promise<DemoMessage[]> {
-  const messages = await Effect.runPromise(sessions.messages(sessionId));
+  const messages = await Effect.runPromise(getSessions().messages(sessionId));
 
   return messages
     .filter(
@@ -89,9 +86,11 @@ export async function addDemoExchange(
   sessionId: SessionId,
   userText: string,
 ): Promise<DemoMessage[]> {
-  await Effect.runPromise(sessions.addUserTurn(sessionId, LLM.user(userText)));
   await Effect.runPromise(
-    sessions.addAssistantTurn(
+    getSessions().addUserTurn(sessionId, LLM.user(userText)),
+  );
+  await Effect.runPromise(
+    getSessions().addAssistantTurn(
       sessionId,
       new LLM.Response({
         content: [{ type: "text", text: ASSISTANT_FALLBACK }],
@@ -106,6 +105,17 @@ export async function addDemoExchange(
   );
 
   return loadDemoMessages(sessionId);
+}
+
+function getSessions(): SessionsService {
+  sessions ??= makeSessionsLocalStorage(
+    IndexedDB.make({
+      databaseName: "bud-demo",
+      keyPrefix: "demo",
+    }),
+    { namespace: "bud/demo/sessions" },
+  );
+  return sessions;
 }
 
 async function titleForSession(summary: SessionSummary): Promise<string> {

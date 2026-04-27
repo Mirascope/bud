@@ -1,4 +1,5 @@
 export { Agent, type AgentConfig, type AgentService } from "./agent.ts";
+export { computerTool } from "./computer-tool.ts";
 
 export {
   AgentUtils,
