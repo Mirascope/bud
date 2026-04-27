@@ -13,6 +13,7 @@ export interface DemoMessage {
   readonly id: string;
   readonly role: "user" | "assistant";
   readonly content: string;
+  readonly timestamp: string;
   readonly attachments?: readonly DemoAttachment[];
 }
 
@@ -83,7 +84,13 @@ export async function deleteDemoSession(sessionId: SessionId): Promise<void> {
 export async function loadDemoMessages(
   sessionId: SessionId,
 ): Promise<DemoMessage[]> {
-  const messages = await Effect.runPromise(getSessions().messages(sessionId));
+  const [messages, turns] = await Promise.all([
+    Effect.runPromise(getSessions().messages(sessionId)),
+    Effect.runPromise(getSessions().turns(sessionId)),
+  ]);
+  const messageTurns = turns.filter(
+    (turn) => turn.type === "user_turn" || turn.type === "assistant_turn",
+  );
 
   return messages
     .filter(
@@ -93,6 +100,7 @@ export async function loadDemoMessages(
       id: `${sessionId}-${index}`,
       role: message.role,
       content: textFromParts(message.content),
+      timestamp: messageTurns[index]?.timestamp ?? new Date(0).toISOString(),
       attachments:
         message.role === "user"
           ? attachmentsFromParts(sessionId, message.content)
@@ -105,7 +113,9 @@ export async function addDemoExchange(
   userText: string,
   attachments: readonly DemoAttachmentInput[] = [],
 ): Promise<DemoMessage[]> {
-  const content: LLM.UserContentPart[] = [{ type: "text", text: userText }];
+  const content: LLM.UserContentPart[] = userText
+    ? [{ type: "text", text: userText }]
+    : [];
   content.push(...(await attachmentsToContentParts(attachments)));
 
   await Effect.runPromise(
@@ -147,7 +157,7 @@ function getSessions(): SessionsService {
 async function titleForSession(summary: SessionSummary): Promise<string> {
   const messages = await loadDemoMessages(summary.sessionId as SessionId);
   const firstUserMessage = messages.find((message) => message.role === "user");
-  return truncateTitle(firstUserMessage?.content ?? "New session");
+  return truncateTitle(firstUserMessage?.content || "Attachment");
 }
 
 function truncateTitle(title: string): string {
@@ -166,7 +176,7 @@ function textFromParts(
     )
     .map((part) => part.text)
     .join("");
-  return text || "[Unsupported content]";
+  return text;
 }
 
 function attachmentsFromParts(

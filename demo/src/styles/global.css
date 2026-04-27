@@ -1,50 +1,96 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #fffef9;
-  --foreground: #102018;
-  --card: #ffffff;
-  --card-foreground: #102018;
-  --popover: #ffffff;
-  --popover-foreground: #102018;
-  --primary: #1f5a3d;
-  --primary-foreground: #f8fff9;
-  --secondary: #eef6ee;
-  --secondary-foreground: #102018;
-  --muted: #edf2ec;
-  --muted-foreground: #667368;
-  --accent: #e5f3e5;
-  --accent-foreground: #173d2b;
-  --destructive: #dc2626;
-  --destructive-foreground: #fafafa;
-  --border: #dfe8dd;
-  --input: #cddccd;
-  --ring: #2f7d55;
-  --radius: 0.625rem;
+  --brand-50: #edf8ef;
+  --brand-100: #d5ecd9;
+  --brand-200: #acd8b6;
+  --brand-300: #7bbe8d;
+  --brand-400: #4f9d69;
+  --brand-500: #2f7d55;
+  --brand-600: #236242;
+  --brand-700: #1f4e38;
+  --brand-800: #1a3f2e;
+  --brand-900: #143326;
+  --brand-950: #0a1c14;
+
+  --neutral-0: #ffffff;
+  --neutral-50: #f7f7f6;
+  --neutral-100: #eeeeec;
+  --neutral-200: #dcdcd8;
+  --neutral-300: #b9b9b3;
+  --neutral-400: #8b8b85;
+  --neutral-500: #66665f;
+  --neutral-600: #484843;
+  --neutral-700: #2e2e2a;
+  --neutral-800: #1c1c1a;
+  --neutral-900: #111110;
+  --neutral-950: #080807;
+
+  --success: #2e7d4f;
+  --success-bg: #eaf5ee;
+  --warning: #b5720b;
+  --warning-bg: #fbf2df;
+  --danger: #b4281d;
+  --danger-bg: #fbe9e6;
+  --info: #1f5aa8;
+  --info-bg: #e6eef9;
+
+  --font-display:
+    "Space Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans:
+    "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --lt-wider: 0.12em;
+
+  --background: var(--neutral-0);
+  --foreground: var(--neutral-900);
+  --card: var(--neutral-0);
+  --card-foreground: var(--neutral-900);
+  --popover: var(--neutral-0);
+  --popover-foreground: var(--neutral-900);
+  --primary: var(--brand-500);
+  --primary-foreground: var(--neutral-0);
+  --secondary: var(--neutral-50);
+  --secondary-foreground: var(--neutral-900);
+  --muted: var(--neutral-50);
+  --muted-foreground: var(--neutral-500);
+  --accent: var(--brand-50);
+  --accent-foreground: var(--brand-700);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--neutral-0);
+  --border: var(--neutral-200);
+  --input: var(--neutral-300);
+  --ring: var(--brand-500);
+  --pixel-grid-line: var(--neutral-100);
+  --radius: 0;
 }
 
 .dark {
-  --background: #07110c;
-  --foreground: #f2fbf1;
-  --card: #0b1a12;
-  --card-foreground: #f2fbf1;
-  --popover: #0b1a12;
-  --popover-foreground: #f2fbf1;
-  --primary: #78c494;
-  --primary-foreground: #07110c;
-  --secondary: #15271d;
-  --secondary-foreground: #f2fbf1;
-  --muted: #15271d;
-  --muted-foreground: #aac0ad;
-  --accent: #1c3325;
-  --accent-foreground: #d8f4dc;
-  --destructive: #ef4444;
-  --destructive-foreground: #fafafa;
-  --border: #203529;
-  --input: #2b4635;
-  --ring: #78c494;
+  --background: var(--neutral-900);
+  --foreground: var(--neutral-50);
+  --card: var(--neutral-800);
+  --card-foreground: var(--neutral-50);
+  --popover: var(--neutral-800);
+  --popover-foreground: var(--neutral-50);
+  --primary: var(--brand-400);
+  --primary-foreground: var(--neutral-0);
+  --secondary: var(--neutral-800);
+  --secondary-foreground: var(--neutral-50);
+  --muted: var(--neutral-800);
+  --muted-foreground: var(--neutral-300);
+  --accent: rgb(47 125 85 / 0.14);
+  --accent-foreground: var(--brand-300);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--neutral-0);
+  --border: var(--neutral-700);
+  --input: var(--neutral-700);
+  --ring: var(--brand-400);
+  --pixel-grid-line: var(--neutral-700);
 }
 
 @theme inline {
@@ -67,10 +113,36 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-brand-950: var(--brand-950);
+  --color-neutral-0: var(--neutral-0);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-900: var(--neutral-900);
+  --color-neutral-950: var(--neutral-950);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
 }
 
 @layer base {
@@ -89,12 +161,19 @@
     min-width: 320px;
     background: var(--background);
     color: var(--foreground);
-    font-family:
-      Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-      "Segoe UI", sans-serif;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
   }
 }

@@ -190,7 +190,7 @@ function HomePage() {
       const sessionId = activeSessionId ?? (await createDemoSession());
       const nextMessages = await addDemoExchange(
         sessionId,
-        content || "Attachments",
+        content,
         attachmentInputs,
       );
       const nextSessions = await listDemoSessions();
@@ -375,7 +375,7 @@ function HomePage() {
           )}
         >
           <div className="mb-3 flex items-center justify-between gap-2 px-2">
-            <div className="text-sm font-semibold text-accent-foreground">
+            <div className="font-display text-sm font-semibold text-accent-foreground">
               Bud
             </div>
             <div className="flex gap-1">
@@ -383,7 +383,7 @@ function HomePage() {
                 aria-label={
                   isSidebarCollapsed ? "Pin sidebar open" : "Collapse sidebar"
                 }
-                className="rounded-lg"
+                className="rounded-none"
                 onClick={handleToggleSidebar}
                 size="icon-sm"
                 type="button"
@@ -397,7 +397,7 @@ function HomePage() {
               </Button>
               <Button
                 aria-label="New session"
-                className="rounded-lg"
+                className="rounded-none"
                 onClick={handleNewSession}
                 size="icon-sm"
                 type="button"
@@ -410,7 +410,7 @@ function HomePage() {
 
           <nav
             aria-label="Sessions"
-            className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto"
+            className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2"
           >
             {sessions.length === 0 && !isLoading ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -420,7 +420,7 @@ function HomePage() {
               sessions.map((session) => (
                 <div
                   className={cn(
-                    "group/session flex w-full items-center gap-1 rounded-xl transition-colors",
+                    "group/session flex w-full items-center gap-1 rounded-none transition-colors",
                     session.sessionId === activeSessionId
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
@@ -433,7 +433,7 @@ function HomePage() {
                 >
                   <button
                     aria-label={session.title}
-                    className="flex min-w-0 flex-1 items-start gap-2 rounded-xl px-3 py-2 text-left text-sm"
+                    className="flex min-w-0 flex-1 items-start gap-2 rounded-none px-3 py-2 text-left text-sm"
                     onClick={() => handleSelectSession(session.sessionId)}
                     type="button"
                   >
@@ -444,7 +444,7 @@ function HomePage() {
                   </button>
                   <button
                     aria-label={`Session menu: ${session.title}`}
-                    className="mr-1 flex size-7 shrink-0 items-center justify-center rounded-lg opacity-0 transition-opacity hover:bg-accent group-hover/session:opacity-100 group-focus-within/session:opacity-100"
+                    className="mr-1 flex size-7 shrink-0 items-center justify-center rounded-none opacity-0 transition-opacity hover:bg-accent group-hover/session:opacity-100 group-focus-within/session:opacity-100"
                     onClick={(event) =>
                       handleOpenSessionMenu(event, session.sessionId)
                     }
@@ -461,12 +461,12 @@ function HomePage() {
 
       {sessionMenu && (
         <div
-          className="fixed z-50 min-w-40 rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl"
+          className="fixed z-50 min-w-40 rounded-none border border-border bg-popover p-1 text-popover-foreground shadow-xl"
           onClick={(event) => event.stopPropagation()}
           style={{ left: sessionMenu.x, top: sessionMenu.y }}
         >
           <button
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-accent"
+            className="flex w-full items-center gap-2 rounded-none px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-accent"
             onClick={() => handleDeleteSession(sessionMenu.sessionId)}
             type="button"
           >
@@ -494,33 +494,11 @@ function HomePage() {
         >
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-36 pt-8">
             {messages.map((message) => (
-              <article
-                className={cn(
-                  "flex items-start gap-3",
-                  message.role === "user"
-                    ? "flex-row-reverse justify-start"
-                    : "justify-start",
-                )}
+              <MessageArticle
                 key={message.id}
-              >
-                <MessageAvatar role={message.role} />
-                <div
-                  className={cn(
-                    "flex max-w-[min(72ch,calc(100%-3rem))] flex-col gap-2 whitespace-pre-wrap break-words text-[15px] leading-7",
-                    message.role === "user"
-                      ? "rounded-2xl bg-secondary px-5 py-2.5 text-secondary-foreground"
-                      : "px-1 text-foreground",
-                  )}
-                >
-                  {message.attachments && message.attachments.length > 0 && (
-                    <AttachmentList
-                      attachments={message.attachments}
-                      onOpenImage={setOpenImageAttachment}
-                    />
-                  )}
-                  {message.content}
-                </div>
-              </article>
+                message={message}
+                onOpenImage={setOpenImageAttachment}
+              />
             ))}
           </div>
         </section>
@@ -536,7 +514,7 @@ function HomePage() {
         {hasMessages && showJumpToLatest && (
           <Button
             className={cn(
-              "fixed bottom-28 left-1/2 z-20 h-9 -translate-x-1/2 rounded-xl border border-input bg-background px-3 text-foreground shadow-lg hover:bg-accent",
+              "fixed bottom-28 left-1/2 z-20 h-9 -translate-x-1/2 rounded-none border border-input bg-background px-3 text-foreground shadow-lg hover:bg-accent",
               !isSidebarCollapsed && "md:left-[calc(50%+9rem)]",
             )}
             onClick={handleJumpToLatest}
@@ -562,7 +540,7 @@ function HomePage() {
           )}
         >
           <form
-            className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-2xl border border-input bg-background p-3 shadow-[0_8px_32px_rgb(0_0_0/0.08)] transition-colors focus-within:border-ring"
+            className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-none border border-input bg-background p-3 shadow-[0_8px_32px_rgb(0_0_0/0.08)] transition-colors focus-within:border-ring"
             onSubmit={handleSubmit}
             ref={formRef}
           >
@@ -587,7 +565,7 @@ function HomePage() {
               />
               <Button
                 aria-label="Attach files"
-                className="mb-1 rounded-lg"
+                className="mb-1 rounded-none"
                 disabled={isLoading || isSending}
                 onClick={() => attachmentInputRef.current?.click()}
                 size="icon-sm"
@@ -609,7 +587,7 @@ function HomePage() {
               />
               <Button
                 aria-label="Send message"
-                className="mb-1 rounded-lg"
+                className="mb-1 rounded-none"
                 disabled={!canSend}
                 size="icon-sm"
                 type="submit"
@@ -634,6 +612,83 @@ interface PendingAttachment extends DemoAttachment {
   readonly file: File;
 }
 
+function MessageArticle({
+  message,
+  onOpenImage,
+}: {
+  readonly message: DemoMessage;
+  readonly onOpenImage: (attachment: DemoAttachment) => void;
+}) {
+  const imageAttachments =
+    message.attachments?.filter(
+      (attachment) => attachment.kind === "image" && attachment.url,
+    ) ?? [];
+  const otherAttachments =
+    message.attachments?.filter(
+      (attachment) => attachment.kind !== "image" || !attachment.url,
+    ) ?? [];
+
+  return (
+    <article
+      className={cn(
+        "flex items-start gap-3",
+        message.role === "user"
+          ? "flex-row-reverse justify-start"
+          : "justify-start",
+      )}
+    >
+      <MessageAvatar role={message.role} />
+      <div
+        className={cn(
+          "flex max-w-[min(72ch,calc(100%-3rem))] flex-col gap-2 text-[15px] leading-7",
+          message.role === "user" ? "items-end" : "items-start",
+        )}
+      >
+        <div
+          className={cn(
+            "flex items-baseline gap-2 leading-none",
+            message.role === "user" && "justify-end",
+          )}
+        >
+          <span className="font-display text-sm font-semibold text-foreground">
+            {message.role === "user" ? "You" : "Bud"}
+          </span>
+          <time
+            className="text-sm text-muted-foreground"
+            dateTime={message.timestamp}
+          >
+            {formatMessageTimestamp(message.timestamp)}
+          </time>
+        </div>
+        {imageAttachments.length > 0 && (
+          <AttachmentList
+            attachments={imageAttachments}
+            onOpenImage={onOpenImage}
+          />
+        )}
+        {(otherAttachments.length > 0 || message.content) && (
+          <div
+            className={cn(
+              "flex flex-col gap-2 whitespace-pre-wrap break-words",
+              message.role === "user"
+                ? "rounded-none bg-secondary px-5 py-2.5 text-secondary-foreground"
+                : "px-1 text-foreground",
+            )}
+          >
+            {otherAttachments.length > 0 && (
+              <AttachmentList
+                attachments={otherAttachments}
+                onOpenImage={onOpenImage}
+              />
+            )}
+            {message.content}
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function AttachmentList({
   attachments,
   onOpenImage,
@@ -645,35 +700,58 @@ function AttachmentList({
 }) {
   return (
     <div className="flex flex-wrap gap-2">
-      {attachments.map((attachment) => (
-        <div
-          className="group/attachment flex max-w-64 items-center gap-2 rounded-xl border border-border/70 bg-background/80 p-1.5 text-foreground shadow-sm"
-          key={attachment.id}
-        >
-          <AttachmentPreview
-            attachment={attachment}
-            onOpenImage={onOpenImage}
-          />
-          <div className="min-w-0 flex-1 pr-1">
-            <div className="truncate text-xs font-medium leading-4">
-              {attachment.name}
-            </div>
-            <div className="truncate text-[11px] leading-4 text-muted-foreground">
-              {attachmentLabel(attachment)}
-            </div>
-          </div>
-          {onRemove && (
+      {attachments.map((attachment) => {
+        const shouldRenderImageOnly =
+          attachment.kind === "image" && attachment.url && !onRemove;
+
+        if (shouldRenderImageOnly) {
+          return (
             <button
-              aria-label={`Remove ${attachment.name}`}
-              className="flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground opacity-70 transition-colors hover:bg-accent hover:text-foreground group-hover/attachment:opacity-100"
-              onClick={() => onRemove(attachment.id)}
+              aria-label={`Open ${attachment.name}`}
+              className="block max-w-64 overflow-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              key={attachment.id}
+              onClick={() => onOpenImage?.(attachment)}
               type="button"
             >
-              <X className="size-3.5" />
+              <img
+                alt=""
+                className="max-h-40 max-w-64 object-contain"
+                src={attachment.url}
+              />
             </button>
-          )}
-        </div>
-      ))}
+          );
+        }
+
+        return (
+          <div
+            className="group/attachment flex max-w-64 items-center gap-2 rounded-none border border-border/70 bg-background/80 p-1.5 text-foreground shadow-sm"
+            key={attachment.id}
+          >
+            <AttachmentPreview
+              attachment={attachment}
+              onOpenImage={onOpenImage}
+            />
+            <div className="min-w-0 flex-1 pr-1">
+              <div className="truncate text-xs font-medium leading-4">
+                {attachment.name}
+              </div>
+              <div className="truncate text-[11px] leading-4 text-muted-foreground">
+                {attachmentLabel(attachment)}
+              </div>
+            </div>
+            {onRemove && (
+              <button
+                aria-label={`Remove ${attachment.name}`}
+                className="flex size-6 shrink-0 items-center justify-center rounded-none text-muted-foreground opacity-70 transition-colors hover:bg-accent hover:text-foreground group-hover/attachment:opacity-100"
+                onClick={() => onRemove(attachment.id)}
+                type="button"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -689,7 +767,7 @@ function AttachmentPreview({
     return (
       <button
         aria-label={`Open ${attachment.name}`}
-        className="size-10 overflow-hidden rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="size-10 overflow-hidden rounded-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         onClick={() => onOpenImage?.(attachment)}
         type="button"
       >
@@ -701,7 +779,7 @@ function AttachmentPreview({
   if (attachment.kind === "video" && attachment.url) {
     return (
       <video
-        className="size-10 rounded-lg object-cover"
+        className="size-10 rounded-none object-cover"
         muted
         src={attachment.url}
       />
@@ -710,7 +788,7 @@ function AttachmentPreview({
 
   const Icon = attachmentIcon(attachment.kind);
   return (
-    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+    <div className="flex size-10 shrink-0 items-center justify-center rounded-none bg-muted text-muted-foreground">
       <Icon className="size-4" />
     </div>
   );
@@ -735,7 +813,7 @@ function ImageOverlay({
     >
       <button
         aria-label="Close image"
-        className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-xl border border-border bg-background text-foreground shadow-lg transition-colors hover:bg-accent"
+        className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-none border border-border bg-background text-foreground shadow-lg transition-colors hover:bg-accent"
         onClick={onClose}
         type="button"
       >
@@ -743,7 +821,7 @@ function ImageOverlay({
       </button>
       <img
         alt={attachment.name}
-        className="max-h-[calc(100vh-6rem)] max-w-[calc(100vw-2rem)] rounded-xl object-contain shadow-2xl"
+        className="max-h-[calc(100vh-6rem)] max-w-[calc(100vw-2rem)] object-contain shadow-2xl"
         onClick={(event) => event.stopPropagation()}
         src={attachment.url}
       />
@@ -756,7 +834,7 @@ function MessageAvatar({ role }: { role: DemoMessage["role"] }) {
     return (
       <div
         aria-label="Bud avatar"
-        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground shadow-sm"
+        className="flex size-8 shrink-0 items-center justify-center rounded-none bg-primary text-sm font-semibold text-primary-foreground shadow-sm"
       >
         B
       </div>
@@ -766,7 +844,7 @@ function MessageAvatar({ role }: { role: DemoMessage["role"] }) {
   return (
     <div
       aria-label="User avatar"
-      className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
+      className="flex size-8 shrink-0 items-center justify-center rounded-none bg-muted text-muted-foreground"
     >
       <User className="size-4" />
     </div>
@@ -856,6 +934,61 @@ function attachmentLabel(attachment: DemoAttachment): string {
   const size = attachment.size ? formatFileSize(attachment.size) : undefined;
   if (size) return `${attachment.mimeType || "file"} · ${size}`;
   return attachment.mimeType || attachment.kind;
+}
+
+function formatMessageTimestamp(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const time = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+
+  if (isSameLocalDay(date, new Date())) {
+    return `Today at ${time}`;
+  }
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (isSameLocalDay(date, yesterday)) {
+    return `Yesterday at ${time}`;
+  }
+
+  const daysAgo = getLocalDayDistance(date, new Date());
+  if (daysAgo > 1 && daysAgo < 7) {
+    const weekday = new Intl.DateTimeFormat(undefined, {
+      weekday: "long",
+    }).format(date);
+    return `${weekday} at ${time}`;
+  }
+
+  const calendarDate = new Intl.DateTimeFormat(undefined, {
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+  return `${calendarDate} at ${time}`;
+}
+
+function isSameLocalDay(left: Date, right: Date): boolean {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+function getLocalDayDistance(left: Date, right: Date): number {
+  const leftDay = new Date(left.getFullYear(), left.getMonth(), left.getDate());
+  const rightDay = new Date(
+    right.getFullYear(),
+    right.getMonth(),
+    right.getDate(),
+  );
+  return Math.round(
+    (rightDay.getTime() - leftDay.getTime()) / (24 * 60 * 60 * 1000),
+  );
 }
 
 function formatFileSize(size: number): string {
