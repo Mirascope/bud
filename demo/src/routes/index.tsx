@@ -4,15 +4,34 @@ import { Textarea } from "@demo/components/ui/textarea";
 import {
   addDemoExchange,
   createDemoSession,
-  ensureDemoSession,
+  deleteDemoSession,
   listDemoSessions,
   loadDemoMessages,
+  type DemoAttachment,
+  type DemoAttachmentInput,
   type DemoMessage,
   type DemoSession,
 } from "@demo/lib/demo-sessions";
 import { cn } from "@demo/lib/utils";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, MessageSquare, Plus, User } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  FileAudio,
+  FileIcon,
+  FileText,
+  ImageIcon,
+  MessageSquare,
+  MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Paperclip,
+  Plus,
+  Trash2,
+  User,
+  Video,
+  X,
+} from "lucide-react";
 import {
   useEffect,
   useLayoutEffect,
@@ -20,6 +39,7 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type MouseEvent,
 } from "react";
 
 export const Route = createFileRoute("/")({
@@ -31,18 +51,33 @@ function HomePage() {
     null,
   );
   const [draft, setDraft] = useState("");
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarHoverArmed, setIsSidebarHoverArmed] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<DemoMessage[]>([]);
+  const [openImageAttachment, setOpenImageAttachment] =
+    useState<DemoAttachment | null>(null);
   const [sessions, setSessions] = useState<DemoSession[]>([]);
+  const [sessionMenu, setSessionMenu] = useState<{
+    readonly sessionId: SessionId;
+    readonly x: number;
+    readonly y: number;
+  } | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const objectUrlsRef = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToLatestRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const hasMessages = messages.length > 0;
-  const canSend = draft.trim().length > 0 && !!activeSessionId && !isSending;
+  const hasAttachments = attachments.length > 0;
+  const canSend =
+    (draft.trim().length > 0 || hasAttachments) && !isLoading && !isSending;
+  const isSidebarHoverSuppressed = isSidebarCollapsed && !isSidebarHoverArmed;
 
   useAutoResize(textareaRef, draft);
 
@@ -51,11 +86,9 @@ function HomePage() {
 
     async function loadInitialSession() {
       setIsLoading(true);
-      const sessionId = await ensureDemoSession();
-      const [nextSessions, nextMessages] = await Promise.all([
-        listDemoSessions(),
-        loadDemoMessages(sessionId),
-      ]);
+      const nextSessions = await listDemoSessions();
+      const sessionId = nextSessions[0]?.sessionId ?? null;
+      const nextMessages = sessionId ? await loadDemoMessages(sessionId) : [];
 
       if (cancelled) return;
       setActiveSessionId(sessionId);
@@ -71,6 +104,15 @@ function HomePage() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      for (const url of objectUrlsRef.current) {
+        URL.revokeObjectURL(url);
+      }
+      objectUrlsRef.current.clear();
+    };
+  }, []);
+
   useLayoutEffect(() => {
     const scrollElement = scrollRef.current;
     if (!scrollElement || !hasMessages) return;
@@ -83,26 +125,105 @@ function HomePage() {
     }
   }, [hasMessages, messages.length]);
 
+  useEffect(() => {
+    if (!sessionMenu) return;
+
+    const closeMenu = () => setSessionMenu(null);
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("keydown", closeMenu);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("keydown", closeMenu);
+    };
+  }, [sessionMenu]);
+
+  useEffect(() => {
+    if (!openImageAttachment) return;
+
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenImageAttachment(null);
+      }
+    };
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [openImageAttachment]);
+
+  useEffect(() => {
+    if (!isSidebarHoverSuppressed) return;
+
+    const rearmHover = (event: PointerEvent) => {
+      if (event.clientX > 40) {
+        setIsSidebarHoverArmed(true);
+      }
+    };
+
+    window.addEventListener("pointermove", rearmHover);
+    return () => {
+      window.removeEventListener("pointermove", rearmHover);
+    };
+  }, [isSidebarHoverSuppressed]);
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const content = draft.trim();
-    if (!content || !activeSessionId || isSending) return;
+    if ((!content && !hasAttachments) || isLoading || isSending) return;
+    const submittedAttachments = attachments;
+    const attachmentInputs: DemoAttachmentInput[] = submittedAttachments.map(
+      (attachment) => ({ file: attachment.file }),
+    );
 
     const scrollElement = scrollRef.current;
     stickToLatestRef.current =
       !scrollElement || !hasMessages || isScrolledToLatest(scrollElement);
 
     setDraft("");
+    setAttachments([]);
+    if (attachmentInputRef.current) attachmentInputRef.current.value = "";
     setIsSending(true);
 
-    void addDemoExchange(activeSessionId, content)
-      .then(async (nextMessages) => {
-        const nextSessions = await listDemoSessions();
-        setMessages(nextMessages);
-        setSessions(nextSessions);
-      })
-      .finally(() => setIsSending(false));
+    void (async () => {
+      const sessionId = activeSessionId ?? (await createDemoSession());
+      const nextMessages = await addDemoExchange(
+        sessionId,
+        content || "Attachments",
+        attachmentInputs,
+      );
+      const nextSessions = await listDemoSessions();
+      setActiveSessionId(sessionId);
+      setMessages(
+        mergeLatestUserAttachments(nextMessages, submittedAttachments),
+      );
+      setSessions(nextSessions);
+    })().finally(() => setIsSending(false));
+  }
+
+  function handleAttachmentChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = [...(event.target.files ?? [])];
+    const nextAttachments = files.map((file) => {
+      const url = shouldPreviewFile(file)
+        ? URL.createObjectURL(file)
+        : undefined;
+      if (url) objectUrlsRef.current.add(url);
+      return pendingAttachmentFromFile(file, url);
+    });
+    setAttachments((current) => [...current, ...nextAttachments]);
+    event.target.value = "";
+  }
+
+  function handleRemoveAttachment(attachmentId: string) {
+    setAttachments((current) => {
+      const attachment = current.find((item) => item.id === attachmentId);
+      if (attachment?.url) {
+        URL.revokeObjectURL(attachment.url);
+        objectUrlsRef.current.delete(attachment.url);
+      }
+      return current.filter((item) => item.id !== attachmentId);
+    });
   }
 
   function handleScroll() {
@@ -150,6 +271,20 @@ function HomePage() {
     });
   }
 
+  function handleToggleSidebar(event: MouseEvent<HTMLButtonElement>) {
+    const button = event.currentTarget;
+
+    if (isSidebarCollapsed) {
+      setIsSidebarHoverArmed(true);
+      setIsSidebarCollapsed(false);
+      return;
+    }
+
+    setIsSidebarHoverArmed(false);
+    setIsSidebarCollapsed(true);
+    button.blur();
+  }
+
   function handleSelectSession(sessionId: SessionId) {
     if (sessionId === activeSessionId) return;
 
@@ -165,87 +300,189 @@ function HomePage() {
     });
   }
 
-  return (
-    <main className="flex h-screen min-h-screen overflow-hidden bg-background text-foreground">
-      <aside className="hidden w-72 shrink-0 border-r border-border bg-accent/35 p-3 md:flex md:flex-col">
-        <div className="mb-3 flex items-center justify-between gap-2 px-2">
-          <div className="text-sm font-semibold text-accent-foreground">
-            Sessions
-          </div>
-          <Button
-            aria-label="New session"
-            className="rounded-lg"
-            onClick={handleNewSession}
-            size="icon-sm"
-            type="button"
-            variant="outline"
-          >
-            <Plus className="size-4" />
-          </Button>
-        </div>
+  function handleSessionContextMenu(
+    event: React.MouseEvent,
+    sessionId: SessionId,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    setSessionMenu({
+      sessionId,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }
 
-        <nav
-          aria-label="Sessions"
-          className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto"
+  function handleOpenSessionMenu(
+    event: React.MouseEvent,
+    sessionId: SessionId,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.currentTarget.getBoundingClientRect();
+    setSessionMenu({
+      sessionId,
+      x: target.right - 8,
+      y: target.bottom + 6,
+    });
+  }
+
+  function handleDeleteSession(sessionId: SessionId) {
+    setSessionMenu(null);
+    setIsLoading(true);
+
+    void deleteDemoSession(sessionId).then(async () => {
+      const nextSessions = await listDemoSessions();
+      const nextActiveSession =
+        sessionId === activeSessionId
+          ? (nextSessions[0]?.sessionId ?? null)
+          : activeSessionId;
+      const nextMessages = nextActiveSession
+        ? await loadDemoMessages(nextActiveSession)
+        : [];
+
+      setActiveSessionId(nextActiveSession);
+      setMessages(nextMessages);
+      setSessions(nextSessions);
+      stickToLatestRef.current = true;
+      setShowJumpToLatest(false);
+      setIsLoading(false);
+    });
+  }
+
+  return (
+    <main className="h-screen min-h-screen overflow-hidden bg-background text-foreground">
+      <div
+        className={cn(
+          "group/sidebar fixed inset-y-0 left-0 z-40 w-8 focus-within:w-72",
+          isSidebarHoverArmed && "hover:w-72",
+          !isSidebarCollapsed && "md:w-72",
+        )}
+        onMouseEnter={() => {
+          if (isSidebarCollapsed) {
+            setIsSidebarHoverArmed(true);
+          }
+        }}
+        onMouseLeave={() => setIsSidebarHoverArmed(true)}
+      >
+        <aside
+          className={cn(
+            "flex h-full w-72 -translate-x-full flex-col border-r border-border bg-accent/95 p-3 shadow-xl backdrop-blur transition-transform duration-150 group-focus-within/sidebar:translate-x-0",
+            isSidebarHoverArmed &&
+              "group-hover/sidebar:translate-x-0 group-hover/sidebar:delay-150",
+            !isSidebarCollapsed && "md:translate-x-0 md:shadow-none",
+            isSidebarHoverSuppressed && "!-translate-x-full",
+          )}
         >
-          {sessions.map((session) => (
-            <button
-              className={cn(
-                "flex items-start gap-2 rounded-xl px-3 py-2 text-left text-sm transition-colors",
-                session.sessionId === activeSessionId
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
-              )}
-              key={session.sessionId}
-              onClick={() => handleSelectSession(session.sessionId)}
-              type="button"
-            >
-              <MessageSquare className="mt-0.5 size-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{session.title}</span>
-            </button>
-          ))}
-        </nav>
-      </aside>
+          <div className="mb-3 flex items-center justify-between gap-2 px-2">
+            <div className="text-sm font-semibold text-accent-foreground">
+              Bud
+            </div>
+            <div className="flex gap-1">
+              <Button
+                aria-label={
+                  isSidebarCollapsed ? "Pin sidebar open" : "Collapse sidebar"
+                }
+                className="rounded-lg"
+                onClick={handleToggleSidebar}
+                size="icon-sm"
+                type="button"
+                variant="outline"
+              >
+                {isSidebarCollapsed ? (
+                  <PanelLeftOpen className="size-4" />
+                ) : (
+                  <PanelLeftClose className="size-4" />
+                )}
+              </Button>
+              <Button
+                aria-label="New session"
+                className="rounded-lg"
+                onClick={handleNewSession}
+                size="icon-sm"
+                type="button"
+                variant="outline"
+              >
+                <Plus className="size-4" />
+              </Button>
+            </div>
+          </div>
+
+          <nav
+            aria-label="Sessions"
+            className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto"
+          >
+            {sessions.length === 0 && !isLoading ? (
+              <div className="px-3 py-2 text-sm text-muted-foreground">
+                No sessions
+              </div>
+            ) : (
+              sessions.map((session) => (
+                <div
+                  className={cn(
+                    "group/session flex w-full items-center gap-1 rounded-xl transition-colors",
+                    session.sessionId === activeSessionId
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
+                  )}
+                  key={session.sessionId}
+                  onContextMenu={(event) =>
+                    handleSessionContextMenu(event, session.sessionId)
+                  }
+                  title={`${session.title}\nRight-click to delete`}
+                >
+                  <button
+                    aria-label={session.title}
+                    className="flex min-w-0 flex-1 items-start gap-2 rounded-xl px-3 py-2 text-left text-sm"
+                    onClick={() => handleSelectSession(session.sessionId)}
+                    type="button"
+                  >
+                    <MessageSquare className="mt-0.5 size-4 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">
+                      {session.title}
+                    </span>
+                  </button>
+                  <button
+                    aria-label={`Session menu: ${session.title}`}
+                    className="mr-1 flex size-7 shrink-0 items-center justify-center rounded-lg opacity-0 transition-opacity hover:bg-accent group-hover/session:opacity-100 group-focus-within/session:opacity-100"
+                    onClick={(event) =>
+                      handleOpenSessionMenu(event, session.sessionId)
+                    }
+                    type="button"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </button>
+                </div>
+              ))
+            )}
+          </nav>
+        </aside>
+      </div>
+
+      {sessionMenu && (
+        <div
+          className="fixed z-50 min-w-40 rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl"
+          onClick={(event) => event.stopPropagation()}
+          style={{ left: sessionMenu.x, top: sessionMenu.y }}
+        >
+          <button
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-accent"
+            onClick={() => handleDeleteSession(sessionMenu.sessionId)}
+            type="button"
+          >
+            <Trash2 className="size-4" />
+            Delete session
+          </button>
+        </div>
+      )}
 
       <section
         className={cn(
-          "relative flex min-w-0 flex-1 flex-col overflow-hidden",
+          "relative flex h-full min-w-0 flex-1 flex-col overflow-hidden transition-[margin-left] duration-150",
+          !isSidebarCollapsed && "md:ml-72",
           hasMessages ? "justify-end" : "justify-center",
         )}
       >
-        <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-2 border-b border-border bg-accent/80 p-2 backdrop-blur md:hidden">
-          <Button
-            aria-label="New session"
-            className="rounded-lg bg-background shadow-sm"
-            onClick={handleNewSession}
-            size="icon-sm"
-            type="button"
-            variant="outline"
-          >
-            <Plus className="size-4" />
-          </Button>
-          <div
-            aria-label="Sessions"
-            className="flex min-w-0 flex-1 gap-1 overflow-x-auto"
-          >
-            {sessions.map((session) => (
-              <button
-                className={cn(
-                  "max-w-44 shrink-0 truncate rounded-lg px-3 py-1.5 text-left text-xs transition-colors",
-                  session.sessionId === activeSessionId
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
-                )}
-                key={session.sessionId}
-                onClick={() => handleSelectSession(session.sessionId)}
-                type="button"
-              >
-                {session.title}
-              </button>
-            ))}
-          </div>
-        </div>
-
         <section
           aria-label="Chat messages"
           className={cn(
@@ -255,7 +492,7 @@ function HomePage() {
           onScroll={handleScroll}
           ref={scrollRef}
         >
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-36 pt-20 md:pt-8">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-36 pt-8">
             {messages.map((message) => (
               <article
                 className={cn(
@@ -269,12 +506,18 @@ function HomePage() {
                 <MessageAvatar role={message.role} />
                 <div
                   className={cn(
-                    "max-w-[min(72ch,calc(100%-3rem))] whitespace-pre-wrap break-words text-[15px] leading-7",
+                    "flex max-w-[min(72ch,calc(100%-3rem))] flex-col gap-2 whitespace-pre-wrap break-words text-[15px] leading-7",
                     message.role === "user"
                       ? "rounded-2xl bg-secondary px-5 py-2.5 text-secondary-foreground"
                       : "px-1 text-foreground",
                   )}
                 >
+                  {message.attachments && message.attachments.length > 0 && (
+                    <AttachmentList
+                      attachments={message.attachments}
+                      onOpenImage={setOpenImageAttachment}
+                    />
+                  )}
                   {message.content}
                 </div>
               </article>
@@ -292,7 +535,10 @@ function HomePage() {
 
         {hasMessages && showJumpToLatest && (
           <Button
-            className="fixed bottom-28 left-1/2 z-20 h-9 -translate-x-1/2 rounded-xl border border-input bg-background px-3 text-foreground shadow-lg hover:bg-accent md:left-[calc(50%+9rem)]"
+            className={cn(
+              "fixed bottom-28 left-1/2 z-20 h-9 -translate-x-1/2 rounded-xl border border-input bg-background px-3 text-foreground shadow-lg hover:bg-accent",
+              !isSidebarCollapsed && "md:left-[calc(50%+9rem)]",
+            )}
             onClick={handleJumpToLatest}
             type="button"
             variant="outline"
@@ -306,42 +552,202 @@ function HomePage() {
           className={cn(
             "w-full px-3",
             hasMessages
-              ? "fixed inset-x-0 bottom-0 bg-gradient-to-t from-background via-background to-background/0 pb-4 pt-10 md:left-72 md:w-[calc(100%-18rem)]"
+              ? cn(
+                  "fixed bottom-0 bg-gradient-to-t from-background via-background to-background/0 pb-4 pt-10",
+                  isSidebarCollapsed
+                    ? "inset-x-0"
+                    : "inset-x-0 md:left-72 md:w-[calc(100%-18rem)]",
+                )
               : "-translate-y-[8vh]",
           )}
         >
           <form
-            className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-2xl border border-input bg-background p-3 shadow-[0_8px_32px_rgb(0_0_0/0.08)] transition-colors focus-within:border-ring"
+            className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-2xl border border-input bg-background p-3 shadow-[0_8px_32px_rgb(0_0_0/0.08)] transition-colors focus-within:border-ring"
             onSubmit={handleSubmit}
             ref={formRef}
           >
+            {attachments.length > 0 && (
+              <AttachmentList
+                attachments={attachments}
+                onOpenImage={setOpenImageAttachment}
+                onRemove={handleRemoveAttachment}
+              />
+            )}
             <label className="sr-only" htmlFor="chat-composer">
               Message
             </label>
-            <Textarea
-              className="max-h-48 min-h-10 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[16px] leading-6 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 md:text-[15px]"
-              disabled={isLoading}
-              id="chat-composer"
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Message Bud"
-              ref={textareaRef}
-              rows={1}
-              value={draft}
-            />
-            <Button
-              aria-label="Send message"
-              className="mb-1 rounded-lg"
-              disabled={!canSend}
-              size="icon-sm"
-              type="submit"
-            >
-              <ArrowUp className="size-4" />
-            </Button>
+            <div className="flex items-end gap-2">
+              <input
+                accept="image/*,audio/*,video/*,application/pdf,text/plain,application/json,text/html,text/css,text/xml,text/rtf,.js,.mjs,.py"
+                className="sr-only"
+                multiple
+                onChange={handleAttachmentChange}
+                ref={attachmentInputRef}
+                type="file"
+              />
+              <Button
+                aria-label="Attach files"
+                className="mb-1 rounded-lg"
+                disabled={isLoading || isSending}
+                onClick={() => attachmentInputRef.current?.click()}
+                size="icon-sm"
+                type="button"
+                variant="outline"
+              >
+                <Paperclip className="size-4" />
+              </Button>
+              <Textarea
+                className="max-h-48 min-h-10 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[16px] leading-6 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 md:text-[15px]"
+                disabled={isLoading}
+                id="chat-composer"
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Message Bud"
+                ref={textareaRef}
+                rows={1}
+                value={draft}
+              />
+              <Button
+                aria-label="Send message"
+                className="mb-1 rounded-lg"
+                disabled={!canSend}
+                size="icon-sm"
+                type="submit"
+              >
+                <ArrowUp className="size-4" />
+              </Button>
+            </div>
           </form>
         </div>
       </section>
+      {openImageAttachment?.url && (
+        <ImageOverlay
+          attachment={openImageAttachment}
+          onClose={() => setOpenImageAttachment(null)}
+        />
+      )}
     </main>
+  );
+}
+
+interface PendingAttachment extends DemoAttachment {
+  readonly file: File;
+}
+
+function AttachmentList({
+  attachments,
+  onOpenImage,
+  onRemove,
+}: {
+  readonly attachments: readonly DemoAttachment[];
+  readonly onOpenImage?: (attachment: DemoAttachment) => void;
+  readonly onRemove?: (attachmentId: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {attachments.map((attachment) => (
+        <div
+          className="group/attachment flex max-w-64 items-center gap-2 rounded-xl border border-border/70 bg-background/80 p-1.5 text-foreground shadow-sm"
+          key={attachment.id}
+        >
+          <AttachmentPreview
+            attachment={attachment}
+            onOpenImage={onOpenImage}
+          />
+          <div className="min-w-0 flex-1 pr-1">
+            <div className="truncate text-xs font-medium leading-4">
+              {attachment.name}
+            </div>
+            <div className="truncate text-[11px] leading-4 text-muted-foreground">
+              {attachmentLabel(attachment)}
+            </div>
+          </div>
+          {onRemove && (
+            <button
+              aria-label={`Remove ${attachment.name}`}
+              className="flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground opacity-70 transition-colors hover:bg-accent hover:text-foreground group-hover/attachment:opacity-100"
+              onClick={() => onRemove(attachment.id)}
+              type="button"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AttachmentPreview({
+  attachment,
+  onOpenImage,
+}: {
+  readonly attachment: DemoAttachment;
+  readonly onOpenImage?: (attachment: DemoAttachment) => void;
+}) {
+  if (attachment.kind === "image" && attachment.url) {
+    return (
+      <button
+        aria-label={`Open ${attachment.name}`}
+        className="size-10 overflow-hidden rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        onClick={() => onOpenImage?.(attachment)}
+        type="button"
+      >
+        <img alt="" className="size-full object-cover" src={attachment.url} />
+      </button>
+    );
+  }
+
+  if (attachment.kind === "video" && attachment.url) {
+    return (
+      <video
+        className="size-10 rounded-lg object-cover"
+        muted
+        src={attachment.url}
+      />
+    );
+  }
+
+  const Icon = attachmentIcon(attachment.kind);
+  return (
+    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+      <Icon className="size-4" />
+    </div>
+  );
+}
+
+function ImageOverlay({
+  attachment,
+  onClose,
+}: {
+  readonly attachment: DemoAttachment;
+  readonly onClose: () => void;
+}) {
+  if (!attachment.url) return null;
+
+  return (
+    <div
+      aria-label={attachment.name}
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+    >
+      <button
+        aria-label="Close image"
+        className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-xl border border-border bg-background text-foreground shadow-lg transition-colors hover:bg-accent"
+        onClick={onClose}
+        type="button"
+      >
+        <X className="size-4" />
+      </button>
+      <img
+        alt={attachment.name}
+        className="max-h-[calc(100vh-6rem)] max-w-[calc(100vw-2rem)] rounded-xl object-contain shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+        src={attachment.url}
+      />
+    </div>
   );
 }
 
@@ -365,6 +771,97 @@ function MessageAvatar({ role }: { role: DemoMessage["role"] }) {
       <User className="size-4" />
     </div>
   );
+}
+
+function pendingAttachmentFromFile(
+  file: File,
+  url: string | undefined,
+): PendingAttachment {
+  return {
+    id: `attachment-${globalThis.crypto.randomUUID()}`,
+    file,
+    name: file.name,
+    kind: attachmentKindFromMimeType(file.type),
+    mimeType: file.type || "application/octet-stream",
+    size: file.size,
+    url,
+  };
+}
+
+function mergeLatestUserAttachments(
+  messages: readonly DemoMessage[],
+  attachments: readonly PendingAttachment[],
+): DemoMessage[] {
+  if (attachments.length === 0) return [...messages];
+
+  const nextMessages = [...messages];
+  for (let index = nextMessages.length - 1; index >= 0; index--) {
+    const message = nextMessages[index]!;
+    if (message.role !== "user") continue;
+    nextMessages[index] = {
+      ...message,
+      attachments: mergeAttachments(message.attachments ?? [], attachments),
+    };
+    break;
+  }
+  return nextMessages;
+}
+
+function mergeAttachments(
+  persistedAttachments: readonly DemoAttachment[],
+  submittedAttachments: readonly PendingAttachment[],
+): readonly DemoAttachment[] {
+  if (submittedAttachments.length > 0) return submittedAttachments;
+  return persistedAttachments;
+}
+
+function shouldPreviewFile(file: File): boolean {
+  return (
+    file.type.startsWith("image/") ||
+    file.type.startsWith("audio/") ||
+    file.type.startsWith("video/")
+  );
+}
+
+function attachmentKindFromMimeType(mimeType: string): DemoAttachment["kind"] {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("audio/")) return "audio";
+  if (mimeType.startsWith("video/")) return "video";
+  if (
+    mimeType.startsWith("text/") ||
+    mimeType === "application/pdf" ||
+    mimeType === "application/json"
+  ) {
+    return "document";
+  }
+  return "file";
+}
+
+function attachmentIcon(kind: DemoAttachment["kind"]) {
+  switch (kind) {
+    case "image":
+      return ImageIcon;
+    case "audio":
+      return FileAudio;
+    case "video":
+      return Video;
+    case "document":
+      return FileText;
+    case "file":
+      return FileIcon;
+  }
+}
+
+function attachmentLabel(attachment: DemoAttachment): string {
+  const size = attachment.size ? formatFileSize(attachment.size) : undefined;
+  if (size) return `${attachment.mimeType || "file"} · ${size}`;
+  return attachment.mimeType || attachment.kind;
+}
+
+function formatFileSize(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 const SCROLL_BOTTOM_THRESHOLD = 32;

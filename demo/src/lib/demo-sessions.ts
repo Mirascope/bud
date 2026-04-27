@@ -13,6 +13,16 @@ export interface DemoMessage {
   readonly id: string;
   readonly role: "user" | "assistant";
   readonly content: string;
+  readonly attachments?: readonly DemoAttachment[];
+}
+
+export interface DemoAttachment {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: "image" | "audio" | "video" | "document" | "file";
+  readonly mimeType: string;
+  readonly size?: number;
+  readonly url?: string;
 }
 
 export interface DemoSession {
@@ -66,6 +76,10 @@ export async function createDemoSession(): Promise<SessionId> {
   return sessionId;
 }
 
+export async function deleteDemoSession(sessionId: SessionId): Promise<void> {
+  await Effect.runPromise(getSessions().delete(sessionId));
+}
+
 export async function loadDemoMessages(
   sessionId: SessionId,
 ): Promise<DemoMessage[]> {
@@ -79,15 +93,23 @@ export async function loadDemoMessages(
       id: `${sessionId}-${index}`,
       role: message.role,
       content: textFromParts(message.content),
+      attachments:
+        message.role === "user"
+          ? attachmentsFromParts(sessionId, message.content)
+          : undefined,
     }));
 }
 
 export async function addDemoExchange(
   sessionId: SessionId,
   userText: string,
+  attachments: readonly DemoAttachmentInput[] = [],
 ): Promise<DemoMessage[]> {
+  const content: LLM.UserContentPart[] = [{ type: "text", text: userText }];
+  content.push(...(await attachmentsToContentParts(attachments)));
+
   await Effect.runPromise(
-    getSessions().addUserTurn(sessionId, LLM.user(userText)),
+    getSessions().addUserTurn(sessionId, LLM.user(content)),
   );
   await Effect.runPromise(
     getSessions().addAssistantTurn(
@@ -105,6 +127,10 @@ export async function addDemoExchange(
   );
 
   return loadDemoMessages(sessionId);
+}
+
+export interface DemoAttachmentInput {
+  readonly file: File;
 }
 
 function getSessions(): SessionsService {
@@ -141,4 +167,126 @@ function textFromParts(
     .map((part) => part.text)
     .join("");
   return text || "[Unsupported content]";
+}
+
+function attachmentsFromParts(
+  sessionId: SessionId,
+  parts: readonly LLM.UserContentPart[],
+): readonly DemoAttachment[] {
+  return parts.flatMap((part, index): readonly DemoAttachment[] => {
+    const id = `${sessionId}-attachment-${index}`;
+
+    switch (part.type) {
+      case "image":
+        return [
+          {
+            id,
+            kind: "image",
+            name: "Image",
+            mimeType:
+              "mimeType" in part.source ? part.source.mimeType : "image/*",
+            url:
+              part.source.type === "base64_image_source"
+                ? dataUrl(part.source.mimeType, part.source.data)
+                : part.source.type === "url_image_source"
+                  ? part.source.url
+                  : undefined,
+          },
+        ];
+
+      case "audio":
+        return [
+          {
+            id,
+            kind: "audio",
+            name: "Audio",
+            mimeType: part.source.mimeType,
+            url:
+              part.source.type === "base64_audio_source"
+                ? dataUrl(part.source.mimeType, part.source.data)
+                : undefined,
+          },
+        ];
+
+      case "document":
+        return [
+          {
+            id,
+            kind: "document",
+            name:
+              part.source.type === "base64_document_source" &&
+              part.source.mediaType === "application/pdf"
+                ? "PDF"
+                : "Document",
+            mimeType:
+              "mediaType" in part.source
+                ? part.source.mediaType
+                : "application/octet-stream",
+          },
+        ];
+
+      default:
+        return [];
+    }
+  });
+}
+
+async function attachmentsToContentParts(
+  attachments: readonly DemoAttachmentInput[],
+): Promise<LLM.UserContentPart[]> {
+  const parts: LLM.UserContentPart[] = [];
+
+  for (const attachment of attachments) {
+    const bytes = new Uint8Array(await attachment.file.arrayBuffer());
+    const contentPart = contentPartFromFile(attachment.file, bytes);
+    if (contentPart) parts.push(contentPart);
+  }
+
+  return parts;
+}
+
+function contentPartFromFile(
+  file: File,
+  bytes: Uint8Array,
+): LLM.UserContentPart | null {
+  if (file.type.startsWith("image/")) {
+    return LLM.imageFromBytes(bytes);
+  }
+
+  if (file.type.startsWith("audio/")) {
+    return LLM.audioFromBytes(bytes);
+  }
+
+  const documentMimeType = documentMimeTypeForFile(file);
+  if (documentMimeType) {
+    return LLM.documentFromBytes(bytes, { mimeType: documentMimeType });
+  }
+
+  return null;
+}
+
+function documentMimeTypeForFile(
+  file: File,
+): LLM.DocumentTextMimeType | LLM.DocumentBase64MimeType | null {
+  if (file.type === "application/pdf") return "application/pdf";
+  if (file.type === "application/json") return "application/json";
+  if (file.type === "text/plain") return "text/plain";
+  if (file.type === "text/javascript") return "text/javascript";
+  if (file.type === "text/html") return "text/html";
+  if (file.type === "text/css") return "text/css";
+  if (file.type === "text/xml") return "text/xml";
+  if (file.type === "text/rtf") return "text/rtf";
+
+  const extension = file.name.slice(file.name.lastIndexOf("."));
+  if (!extension) return null;
+
+  try {
+    return LLM.mimeTypeFromExtension(extension);
+  } catch {
+    return null;
+  }
+}
+
+function dataUrl(mimeType: string, data: string): string {
+  return `data:${mimeType};base64,${data}`;
 }
