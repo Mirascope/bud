@@ -1,6 +1,13 @@
+import { computerTool } from "./computer-tool.ts";
+import { Cron, type CronService } from "./cron.ts";
+import { cronTool, identityTool, journalTool } from "./domain-tools.ts";
+import { Identity, type IdentityService } from "./identity.ts";
+import { Journal, type JournalService } from "./journal.ts";
 import {
   Agent,
-  computerTool,
+  Compaction,
+  System,
+  Tools,
   streamAgentTurn,
   type AgentStreamEvent,
 } from "@bud/agent";
@@ -21,6 +28,7 @@ export interface BudConfig {
   readonly modelId: string;
   readonly tools?: readonly LLM.AnyTool[];
   readonly includeComputerTool?: boolean;
+  readonly includeDomainTools?: boolean;
   readonly maxIterations?: number;
   readonly thinkingLevel?: ThinkingLevel | null;
   readonly autocompactBufferTokens?: number;
@@ -48,6 +56,9 @@ export interface BudService {
   readonly config: BudConfig;
   readonly sessions: SessionsService;
   readonly computer: ComputerService;
+  readonly identity: IdentityService;
+  readonly journal: JournalService;
+  readonly cron: CronService;
   readonly createSession: (
     options?: BudCreateSessionOptions,
   ) => Effect.Effect<SessionHeader, SessionError>;
@@ -62,22 +73,34 @@ export interface BudService {
 export class Bud extends Context.Tag("@bud/bud/Bud")<Bud, BudService>() {
   static layer(
     config: BudConfig,
-  ): Layer.Layer<Bud, never, Computer | LLM.Model | LLM.ModelInfo | Sessions> {
+  ): Layer.Layer<
+    Bud,
+    never,
+    Computer | Identity | Journal | Cron | LLM.Model | LLM.ModelInfo | Sessions
+  > {
     return Layer.effect(
       Bud,
       Effect.gen(function* () {
         const sessions = yield* Sessions;
         const computer = yield* Computer;
+        const identity = yield* Identity;
+        const journal = yield* Journal;
+        const cron = yield* Cron;
         const model = yield* LLM.Model;
         const modelInfo = yield* LLM.ModelInfo;
-        const tools =
+        const computerTools =
           (config.includeComputerTool ?? true)
             ? [...(config.tools ?? []), computerTool]
             : [...(config.tools ?? [])];
+        const tools =
+          (config.includeDomainTools ?? true)
+            ? [...computerTools, identityTool, journalTool, cronTool]
+            : computerTools;
+        const agentSystem = System.fromPrompt(config.systemPrompt);
+        const agentTools = Tools.fromArray(tools);
+        const agentCompaction = Compaction.default();
 
         const agentConfig = {
-          systemPrompt: config.systemPrompt,
-          tools,
           maxIterations: config.maxIterations,
           autocompactBufferTokens: config.autocompactBufferTokens,
         };
@@ -88,17 +111,47 @@ export class Bud extends Context.Tag("@bud/bud/Bud")<Bud, BudService>() {
         ): Effect.Effect<
           A,
           E,
-          Exclude<R, Computer | LLM.Model | LLM.ModelInfo | Sessions>
+          Exclude<
+            R,
+            | Computer
+            | Identity
+            | Journal
+            | Cron
+            | LLM.Model
+            | LLM.ModelInfo
+            | Sessions
+            | System
+            | Tools
+            | Compaction
+          >
         > =>
           effect.pipe(
             Effect.provideService(Sessions, sessions),
             Effect.provideService(Computer, computer),
+            Effect.provideService(Identity, identity),
+            Effect.provideService(Journal, journal),
+            Effect.provideService(Cron, cron),
             Effect.provideService(LLM.ModelInfo, modelInfo),
             Effect.provideService(LLM.Model, model),
+            Effect.provide(agentSystem),
+            Effect.provide(agentTools),
+            Effect.provide(agentCompaction),
           ) as Effect.Effect<
             A,
             E,
-            Exclude<R, Computer | LLM.Model | LLM.ModelInfo | Sessions>
+            Exclude<
+              R,
+              | Computer
+              | Identity
+              | Journal
+              | Cron
+              | LLM.Model
+              | LLM.ModelInfo
+              | Sessions
+              | System
+              | Tools
+              | Compaction
+            >
           >;
 
         const toUserMessage = (
@@ -136,6 +189,9 @@ export class Bud extends Context.Tag("@bud/bud/Bud")<Bud, BudService>() {
           config,
           sessions,
           computer,
+          identity,
+          journal,
+          cron,
           createSession,
           prompt: (options) => {
             const modelId = options.modelId ?? config.modelId;

@@ -7,7 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./browser": "./src/browser.ts"
+    "./browser": "./src/bud.browser.ts"
   },
   "dependencies": {
     "@bud/agent": "workspace:*",

@@ -1,4 +1,7 @@
 import { Bud } from "./bud.ts";
+import { Cron } from "./cron.ts";
+import { Identity } from "./identity.ts";
+import { Journal } from "./journal.ts";
 import {
   Computer,
   makeComputerError,
@@ -47,6 +50,7 @@ function makeLayer(provider: LLM.ProviderService): Layer.Layer<Bud | Sessions> {
     Bud.layer({
       systemPrompt: "You are Bud.",
       modelId: "mock/model",
+      includeDomainTools: false,
     }),
     sessions,
   ).pipe(
@@ -55,6 +59,9 @@ function makeLayer(provider: LLM.ProviderService): Layer.Layer<Bud | Sessions> {
         sessions,
         model,
         LLM.ModelInfoDefault,
+        Identity.memory(),
+        Journal.memory(),
+        Cron.memory(),
         Layer.succeed(Computer, makeComputer()),
       ),
     ),

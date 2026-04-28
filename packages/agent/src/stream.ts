@@ -1,5 +1,7 @@
+import { Compaction } from "./compaction.ts";
 import type { AgentStreamEvent } from "./stream-events.ts";
-import { AgentUtils } from "./utils.ts";
+import { System, systemPromptText } from "./system.ts";
+import { Tools } from "./tools.ts";
 import * as LLM from "@bud/llm";
 import {
   Sessions,
@@ -10,7 +12,7 @@ import {
 import { Effect, Queue, Stream } from "effect";
 
 export interface AgentStreamConfig {
-  readonly systemPrompt: string;
+  readonly systemPrompt?: string;
   readonly tools?: readonly LLM.AnyTool[];
   readonly maxIterations?: number;
   readonly thinkingLevel?: ThinkingLevel | null;
@@ -26,18 +28,32 @@ export function streamAgentTurn(
 ): Effect.Effect<
   Stream.Stream<AgentStreamEvent>,
   SessionError,
-  LLM.Model | LLM.ModelInfo | Sessions
+  LLM.Model | LLM.ModelInfo | Sessions | System | Tools | Compaction
 > {
   return Effect.gen(function* () {
     const maxIterations = config.maxIterations ?? 25;
-    const toolsArg =
-      config.tools && config.tools.length > 0 ? config.tools : undefined;
 
     const model = yield* LLM.Model;
     const sessions = yield* Sessions;
-    const { loadMessages, compactIfNeeded } = yield* AgentUtils.make({
+    const system = yield* System;
+    const tools = yield* Tools;
+    const compaction = yield* Compaction;
+    const systemPrompt = config.systemPrompt
+      ? config.systemPrompt
+      : systemPromptText(
+          yield* system.prompt({
+            sessionId,
+            modelId: config.modelId,
+            thinkingLevel: config.thinkingLevel,
+          }),
+        );
+    const toolList = config.tools
+      ? [...config.tools]
+      : [...(yield* tools.tools)];
+    const toolsArg = toolList.length > 0 ? toolList : undefined;
+    const { loadMessages, compactIfNeeded } = yield* compaction.prepare({
       sessionId,
-      systemPrompt: config.systemPrompt,
+      systemPrompt,
       tools: toolsArg,
       autocompactBufferTokens: config.autocompactBufferTokens,
     });

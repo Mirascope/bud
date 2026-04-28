@@ -1,7 +1,10 @@
 import { Agent } from "./agent.ts";
-import { computerTool } from "./computer-tool.ts";
+import { Compaction } from "./compaction.ts";
+import { System } from "./system.ts";
+import { Tools } from "./tools.ts";
 import {
   Computer,
+  runComputerCli,
   type ComputerService,
   type DirectoryEntry,
   type FileContent,
@@ -51,6 +54,9 @@ function makeLayer(provider: LLM.ProviderService) {
     makeSessionsLayer(),
     makeModelLayer(provider),
     LLM.ModelInfoDefault,
+    System.fromPrompt("You are Bud."),
+    Tools.fromArray(),
+    Compaction.default(),
   );
 }
 
@@ -184,6 +190,18 @@ function makeComputerLayer() {
 
   return Layer.succeed(Computer, service);
 }
+
+const computerTool = LLM.defineTool({
+  name: "computer",
+  description: "Run workspace file operations and terminal commands.",
+  schema: Schema.Struct({
+    command: Schema.String,
+  }),
+  tool: ({ command }) =>
+    runComputerCli(command).pipe(
+      Effect.map((output) => LLM.toolResult(output)),
+    ),
+});
 
 it.effect("runs a prompt through sessions and hydrates stored media", () => {
   let observedMessages: readonly LLM.Message[] = [];

@@ -348,13 +348,8 @@ async function fetchOpenAIChatCompletions(
   return response;
 }
 
-export interface DecodeOpenAIChatCompletionsStreamOptions {
-  readonly closeOnFinishReason?: boolean;
-}
-
 export async function* decodeOpenAIChatCompletionsStream(
   events: AsyncIterable<OpenAIChatStreamEvent>,
-  options: DecodeOpenAIChatCompletionsStreamOptions = {},
 ): AsyncGenerator<StreamResponseChunk> {
   const toolCalls = new Map<
     number,
@@ -371,12 +366,7 @@ export async function* decodeOpenAIChatCompletionsStream(
     });
   };
 
-  const iterator = events[Symbol.asyncIterator]();
-  while (true) {
-    const item = await iterator.next();
-    if (item.done) break;
-    const event = item.value;
-
+  for await (const event of events) {
     yield rawStreamEventChunk(event);
     if (event.usage) {
       yield usageDeltaChunk({
@@ -430,13 +420,12 @@ export async function* decodeOpenAIChatCompletionsStream(
         yield toolCallEnd(state.id);
       }
       yield finishReasonChunk(decodeFinishReason(choice.finish_reason));
-      if (options.closeOnFinishReason) {
-        yield* emitRawMessage();
-        return;
-      }
     }
   }
 
+  if (textOpen) {
+    yield textEnd();
+  }
   yield* emitRawMessage();
 }
 

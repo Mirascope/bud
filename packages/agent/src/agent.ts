@@ -1,4 +1,6 @@
-import { AgentUtils } from "./utils.ts";
+import { Compaction } from "./compaction.ts";
+import { System, systemPromptText } from "./system.ts";
+import { Tools } from "./tools.ts";
 import * as LLM from "@bud/llm";
 import {
   Sessions,
@@ -10,7 +12,7 @@ import {
 import { Effect } from "effect";
 
 export interface AgentConfig {
-  readonly systemPrompt: string;
+  readonly systemPrompt?: string;
   readonly tools?: readonly LLM.AnyTool[];
   readonly maxIterations?: number;
   readonly autocompactBufferTokens?: number;
@@ -23,7 +25,7 @@ export interface AgentService {
   ) => Effect.Effect<
     LLM.Response,
     LLM.ProviderError | SessionError,
-    LLM.Model | LLM.ModelInfo | Sessions
+    LLM.Model | LLM.ModelInfo | Sessions | System | Tools | Compaction
   >;
 
   readonly resume: (
@@ -31,15 +33,32 @@ export interface AgentService {
   ) => Effect.Effect<
     LLM.Response,
     LLM.ProviderError | SessionError,
-    LLM.Model | LLM.ModelInfo | Sessions
+    LLM.Model | LLM.ModelInfo | Sessions | System | Tools | Compaction
   >;
 }
 
 export const Agent = {
   make: (config: AgentConfig): AgentService => {
     const maxIterations = config.maxIterations ?? 25;
-    const tools = config.tools ?? [];
-    const toolsArg = tools.length > 0 ? tools : undefined;
+
+    const resolveRuntime = (sessionId: SessionId) =>
+      Effect.gen(function* () {
+        const system = yield* System;
+        const tools = yield* Tools;
+        const compaction = yield* Compaction;
+        const prompt = config.systemPrompt
+          ? config.systemPrompt
+          : systemPromptText(yield* system.prompt({ sessionId }));
+        const toolList = config.tools
+          ? [...config.tools]
+          : [...(yield* tools.tools)];
+        return {
+          systemPrompt: prompt,
+          tools: toolList,
+          toolsArg: toolList.length > 0 ? toolList : undefined,
+          compaction,
+        };
+      });
 
     const runToolLoop = (
       sessionId: SessionId,
@@ -93,11 +112,12 @@ export const Agent = {
         Effect.gen(function* () {
           const model = yield* LLM.Model;
           const sessions = yield* Sessions;
+          const runtime = yield* resolveRuntime(sessionId);
           const { loadMessages, compactIfNeeded, retryOnOverflow } =
-            yield* AgentUtils.make({
+            yield* runtime.compaction.prepare({
               sessionId,
-              systemPrompt: config.systemPrompt,
-              tools: toolsArg,
+              systemPrompt: runtime.systemPrompt,
+              tools: runtime.toolsArg,
               autocompactBufferTokens: config.autocompactBufferTokens,
             });
 
@@ -105,7 +125,7 @@ export const Agent = {
           const messages = yield* loadMessages();
 
           const response = yield* model
-            .call({ content: messages, tools: toolsArg })
+            .call({ content: messages, tools: runtime.toolsArg })
             .pipe(retryOnOverflow);
           yield* sessions.addAssistantTurn(sessionId, response);
 
@@ -122,18 +142,19 @@ export const Agent = {
         Effect.gen(function* () {
           const model = yield* LLM.Model;
           const sessions = yield* Sessions;
+          const runtime = yield* resolveRuntime(sessionId);
           const { loadMessages, compactIfNeeded, retryOnOverflow } =
-            yield* AgentUtils.make({
+            yield* runtime.compaction.prepare({
               sessionId,
-              systemPrompt: config.systemPrompt,
-              tools: toolsArg,
+              systemPrompt: runtime.systemPrompt,
+              tools: runtime.toolsArg,
               autocompactBufferTokens: config.autocompactBufferTokens,
             });
 
           const messages = yield* loadMessages();
 
           const response = yield* model
-            .call({ content: messages, tools: toolsArg })
+            .call({ content: messages, tools: runtime.toolsArg })
             .pipe(retryOnOverflow);
           yield* sessions.addAssistantTurn(sessionId, response);
 

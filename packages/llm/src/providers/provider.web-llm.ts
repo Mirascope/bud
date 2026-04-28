@@ -13,7 +13,6 @@ import {
   type ProviderCallArgs,
   type ProviderService,
 } from "./provider.schemas.ts";
-import { functionCallingModelIds, prebuiltAppConfig } from "@mlc-ai/web-llm";
 import type {
   AppConfig,
   ChatCompletion,
@@ -30,9 +29,8 @@ export const WEB_LLM_HERMES_3_MODEL_ID = "Hermes-3-Llama-3.1-8B-q4f16_1-MLC";
 export const WEB_LLM_GEMMA_4_MODEL_ID = "gemma-4-E2B-it-q4f16_1-MLC";
 export const WEB_LLM_DEFAULT_MODEL_ID = WEB_LLM_HERMES_3_MODEL_ID;
 export const WEB_LLM_FUNCTION_CALLING_MODEL_IDS = [
-  ...functionCallingModelIds.filter((modelId) =>
-    modelId.startsWith("Hermes-3-"),
-  ),
+  "Hermes-3-Llama-3.1-8B-q4f16_1-MLC",
+  "Hermes-3-Llama-3.1-8B-q4f32_1-MLC",
 ] as readonly string[];
 
 const GEMMA_4_REPO =
@@ -49,7 +47,9 @@ export const WEB_LLM_GEMMA_4_MODEL_RECORD: ModelRecord = {
 };
 
 export const WebLLMDefaultAppConfig: AppConfig = {
-  ...prebuiltAppConfig,
+  model_list: WEB_LLM_FUNCTION_CALLING_MODEL_IDS.map((modelId) => ({
+    model_id: modelId,
+  })) as AppConfig["model_list"],
   useIndexedDBCache: true,
 };
 
@@ -125,7 +125,7 @@ function buildWebLLMRequest(
     includeTools &&
     args.tools &&
     args.tools.length > 0 &&
-    !functionCallingModelIds.includes(modelId)
+    !WEB_LLM_FUNCTION_CALLING_MODEL_IDS.includes(modelId)
   ) {
     throw new ProviderError({
       message: `${modelId} does not support tool use in WebLLM.`,
@@ -154,6 +154,21 @@ function isAsyncIterable<T>(value: unknown): value is AsyncIterable<T> {
   return (
     value != null && typeof value === "object" && Symbol.asyncIterator in value
   );
+}
+
+async function* closeWebLLMStreamOnFinish(
+  events: AsyncIterable<ChatCompletionChunk>,
+): AsyncGenerator<OpenAIChatStreamEvent> {
+  const iterator = events[Symbol.asyncIterator]();
+  while (true) {
+    const next = await iterator.next();
+    if (next.done) return;
+    const event = next.value as OpenAIChatStreamEvent;
+    yield event;
+    if (event.choices?.some((choice) => choice.finish_reason)) {
+      return;
+    }
+  }
 }
 
 async function createWebLLMCompletion(
@@ -203,8 +218,7 @@ async function* createWebLLMDecodedStream(
       });
     }
     yield* decodeOpenAIChatCompletionsStream(
-      response as AsyncIterable<OpenAIChatStreamEvent>,
-      { closeOnFinishReason: true },
+      closeWebLLMStreamOnFinish(response),
     );
   } catch (error) {
     if (!args.tools?.length || !isWebLLMToolParseError(error)) {
@@ -221,8 +235,7 @@ async function* createWebLLMDecodedStream(
       });
     }
     yield* decodeOpenAIChatCompletionsStream(
-      response as AsyncIterable<OpenAIChatStreamEvent>,
-      { closeOnFinishReason: true },
+      closeWebLLMStreamOnFinish(response),
     );
   }
 }
@@ -250,10 +263,21 @@ async function createDefaultWebLLMEngine(
   }
 
   const { CreateWebWorkerMLCEngine } = await import("@mlc-ai/web-llm");
-  const worker = new Worker(new URL("./web-llm.worker.ts", import.meta.url), {
-    type: "module",
-  });
+  const worker = new Worker(
+    new URL("./provider.web-llm.worker.ts", import.meta.url),
+    {
+      type: "module",
+    },
+  );
   return CreateWebWorkerMLCEngine(worker, modelId, engineConfig, chatOptions);
+}
+
+async function getDefaultWebLLMAppConfig(): Promise<AppConfig> {
+  const { prebuiltAppConfig } = await import("@mlc-ai/web-llm");
+  return {
+    ...prebuiltAppConfig,
+    useIndexedDBCache: true,
+  };
 }
 
 export function makeWebLLMProvider(
@@ -261,14 +285,21 @@ export function makeWebLLMProvider(
 ): WebLLMProviderService {
   const defaultModelId = options.modelId ?? WEB_LLM_DEFAULT_MODEL_ID;
   const createEngine = options.createEngine ?? createDefaultWebLLMEngine;
-  const appConfig = options.appConfig ?? WebLLMDefaultAppConfig;
   const engineCache = new Map<string, Promise<WebLLMEngine>>();
+  let appConfigPromise: Promise<AppConfig> | null = null;
 
-  const getEngine = (modelId: string): Promise<WebLLMEngine> => {
+  const getAppConfig = (): Promise<AppConfig> => {
+    if (options.appConfig) return Promise.resolve(options.appConfig);
+    appConfigPromise ??= getDefaultWebLLMAppConfig();
+    return appConfigPromise;
+  };
+
+  const getEngine = async (modelId: string): Promise<WebLLMEngine> => {
     if (options.engine) return Promise.resolve(options.engine);
     const cached = engineCache.get(modelId);
     if (cached) return cached;
 
+    const appConfig = await getAppConfig();
     const engine = createEngine(
       modelId,
       {
@@ -294,7 +325,7 @@ export function makeWebLLMProvider(
           const { hasModelInCache } = await import("@mlc-ai/web-llm");
           return hasModelInCache(
             resolveWebLLMModelId(modelId, defaultModelId),
-            appConfig,
+            await getAppConfig(),
           );
         },
         catch: webLLMProviderError,
@@ -310,7 +341,10 @@ export function makeWebLLMProvider(
           engineCache.delete(resolvedModelId);
 
           const { deleteModelAllInfoInCache } = await import("@mlc-ai/web-llm");
-          await deleteModelAllInfoInCache(resolvedModelId, appConfig);
+          await deleteModelAllInfoInCache(
+            resolvedModelId,
+            await getAppConfig(),
+          );
         },
         catch: webLLMProviderError,
       }),

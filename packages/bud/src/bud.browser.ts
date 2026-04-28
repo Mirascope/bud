@@ -1,4 +1,7 @@
 import { Bud, type BudConfig } from "./bud.ts";
+import { Cron } from "./cron.ts";
+import { Identity } from "./identity.ts";
+import { Journal } from "./journal.ts";
 import {
   WebContainerComputer,
   type WebContainerComputerOptions,
@@ -19,6 +22,7 @@ export interface BrowserBudOptions
       | "modelId"
       | "tools"
       | "includeComputerTool"
+      | "includeDomainTools"
       | "maxIterations"
       | "thinkingLevel"
       | "autocompactBufferTokens"
@@ -96,6 +100,9 @@ export const BrowserBud = {
 
     const dependencies = Layer.mergeAll(
       WebContainerComputer.layer(options.computer),
+      Identity.memory(),
+      Journal.memory(),
+      Cron.memory(),
       sessions,
       model,
       LLM.ModelInfoDefault,
@@ -106,6 +113,7 @@ export const BrowserBud = {
       modelId,
       tools: options.tools,
       includeComputerTool: options.includeComputerTool,
+      includeDomainTools: options.includeDomainTools,
       maxIterations: options.maxIterations,
       thinkingLevel: options.thinkingLevel,
       autocompactBufferTokens: options.autocompactBufferTokens,

@@ -1,5 +1,12 @@
 export { Agent, type AgentConfig, type AgentService } from "./agent.ts";
-export { computerTool } from "./computer-tool.ts";
+export { Compaction, type CompactionService } from "./compaction.ts";
+export {
+  System,
+  systemPromptText,
+  type SystemContext,
+  type SystemService,
+} from "./system.ts";
+export { Tools, type ToolsService } from "./tools.ts";
 
 export {
   AgentUtils,
