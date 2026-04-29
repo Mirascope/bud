@@ -18,9 +18,3 @@ export {
   ProviderProxy,
   type ProviderProxyOptions,
 } from "../spiders/provider.proxy.ts";
-
-export {
-  SpiderGatewayClient,
-  createSpiderGatewayClient,
-  type SpiderGatewayStreamHandler,
-} from "../spiders/gateway.shared-worker.ts";

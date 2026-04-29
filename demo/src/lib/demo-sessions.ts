@@ -1,18 +1,23 @@
 import {
   getHostedProviderAvailability,
+  streamHostedProvider,
   type HostedProviderAvailability,
 } from "./llm-proxy.ts";
 import * as LLM from "@bud/llm";
 import {
   type SessionHeader,
   type SessionId,
+  type SessionSummary,
+  type SessionsService,
   type ThinkingLevel,
 } from "@bud/sessions";
 import {
-  createSpiderGatewayClient,
-  type SpiderGatewayClient,
+  BrowserBud,
+  Bud,
+  ProviderProxy,
+  type BudService,
 } from "@mirascope/bud";
-import { Effect } from "effect";
+import { Effect, Stream } from "effect";
 
 export interface DemoMessage {
   readonly id: string;
@@ -85,8 +90,8 @@ export type DemoActivityEvent =
 const MODEL_ID = `web-llm/${LLM.WEB_LLM_DEFAULT_MODEL_ID}`;
 const SETTINGS_KEY = "bud/demo/settings";
 
+const budPromises = new Map<string, Promise<BudService>>();
 let webLLMProvider: LLM.WebLLMProviderService | null = null;
-let spiderGateway: SpiderGatewayClient | null = null;
 const progressListeners = new Set<(status: string) => void>();
 
 export interface DemoProviderSecrets {
@@ -408,6 +413,7 @@ export async function resetDemoModelPreparation(
 
   await Effect.runPromise(getWebLLMProvider().deleteCachedModel(modelId));
   window.localStorage.removeItem(localModelReadyKey(modelId));
+  budPromises.clear();
   return {
     ...getDemoModelPreparationStatus(modelId),
     cached: false,
@@ -447,14 +453,23 @@ function assertBrowserRuntimeSupport(): void {
 }
 
 export async function listDemoSessions(): Promise<DemoSession[]> {
-  return getSpiderGateway().call<DemoSession[]>("listSessions");
+  const sessions = await getSessions();
+  const summaries = await Effect.runPromise(sessions.summarize("bud"));
+  return Promise.all(
+    summaries.map(async (summary) => ({
+      sessionId: summary.sessionId as SessionId,
+      title: await titleForSession(summary),
+      lastActiveAt: summary.lastActiveAt,
+    })),
+  );
 }
 
 export async function ensureDemoSession(
   sessionId?: SessionId,
 ): Promise<SessionId> {
   if (sessionId) {
-    await getSpiderGateway().call("openSession", { sessionId });
+    const sessions = await getSessions();
+    await Effect.runPromise(sessions.open(sessionId));
     return sessionId;
   }
 
@@ -467,21 +482,67 @@ export async function ensureDemoSession(
 
 export async function createDemoSession(): Promise<SessionId> {
   const settings = getDemoSettings();
-  const header = await getSpiderGateway().call<SessionHeader>("createSession", {
-    modelId: settings.modelId,
-    thinkingLevel: settings.thinkingLevel,
-  });
+  const header = await createDemoSessionHeader(
+    settings.modelId,
+    settings.thinkingLevel,
+  );
   return header.sessionId;
 }
 
 export async function deleteDemoSession(sessionId: SessionId): Promise<void> {
-  await getSpiderGateway().call("deleteSession", { sessionId });
+  const sessions = await getSessions();
+  await Effect.runPromise(sessions.delete(sessionId));
 }
 
 export async function loadDemoMessages(
   sessionId: SessionId,
 ): Promise<DemoMessage[]> {
-  return getSpiderGateway().call<DemoMessage[]>("loadMessages", { sessionId });
+  const sessions = await getSessions();
+  const [messages, turns] = await Promise.all([
+    Effect.runPromise(sessions.messages(sessionId)),
+    Effect.runPromise(sessions.turns(sessionId)),
+  ]);
+  const messageTurns = turns.filter(
+    (turn) => turn.type === "user_turn" || turn.type === "assistant_turn",
+  );
+
+  return messages
+    .filter(
+      (message) => message.role === "user" || message.role === "assistant",
+    )
+    .map((message, index) => {
+      const turn = messageTurns[index];
+      return {
+        id: `${sessionId}-${index}`,
+        role: message.role,
+        content: textFromParts(message.content),
+        timestamp: turn?.timestamp ?? new Date(0).toISOString(),
+        attachments:
+          message.role === "user"
+            ? attachmentsFromParts(sessionId, message.content)
+            : undefined,
+        activities:
+          message.role === "assistant"
+            ? activitiesFromAssistantParts(
+                `${sessionId}-${index}`,
+                message.content,
+              )
+            : undefined,
+        modelId:
+          message.role === "assistant"
+            ? (message.modelId ?? getDemoSettings().modelId)
+            : undefined,
+        thinkingLevel:
+          message.role === "assistant"
+            ? getDemoSettings().thinkingLevel
+            : undefined,
+        isComplete: message.role === "assistant" ? true : undefined,
+      };
+    })
+    .filter((message) => {
+      if (message.role !== "user") return true;
+      return Boolean(message.content || (message.attachments?.length ?? 0) > 0);
+    });
 }
 
 export async function addDemoExchange(
@@ -505,70 +566,80 @@ export async function addDemoExchange(
     });
   if (progressListener) progressListeners.add(progressListener);
 
+  const content: LLM.UserContentPart[] = userText
+    ? [{ type: "text", text: userText }]
+    : [];
   try {
+    content.push(...(await attachmentsToContentParts(attachments)));
+
     const settings = getDemoSettings();
     const modelId = options.modelId ?? settings.modelId;
     const thinkingLevel = options.thinkingLevel ?? settings.thinkingLevel;
-    return await getSpiderGateway().stream<DemoMessage[]>(
-      "addExchange",
-      {
+    const bud = await getBud(modelId);
+    const stream = await Effect.runPromise(
+      bud.stream({
         sessionId,
         modelId,
         thinkingLevel,
-        userText,
-        attachments,
-      },
-      (rawEvent) => {
-        const event = rawEvent as
-          | { readonly type: "status"; readonly status: string }
-          | { readonly type: string; readonly [key: string]: unknown };
-        if (event.type === "status") {
-          options.onStatus?.(event.status);
-          return;
-        }
-        if (event.type === "error") {
-          options.onError?.(new Error(String(event.message)));
-          return;
-        }
-
-        switch (event.type) {
-          case "text":
-            options.onAssistantDelta?.(String(event.delta ?? ""));
-            break;
-          case "thought":
-            options.onActivity?.({
-              type: "thought",
-              delta: String(event.delta ?? ""),
-            });
-            options.onStatus?.("Thinking");
-            break;
-          case "tool_call":
-            options.onActivity?.({
-              type: "tool_call",
-              id: String(event.id),
-              name: String(event.name),
-              args: event.args,
-            });
-            options.onStatus?.(`Using ${String(event.name)}`);
-            break;
-          case "tool_result":
-            options.onActivity?.({
-              type: "tool_result",
-              id: String(event.id),
-              ok: event.ok === true,
-              output: event.output,
-            });
-            options.onStatus?.("Reading tool result");
-            break;
-          case "done":
-            options.onStatus?.("Done");
-            options.onDone?.();
-            break;
-          default:
-            break;
-        }
-      },
+        message: LLM.user(content),
+      }),
     );
+
+    await Effect.runPromise(
+      Stream.runForEach(stream, (event) => {
+        if (event.type === "error")
+          return Effect.fail(new Error(event.message));
+
+        return Effect.sync(() => {
+          switch (event.type) {
+            case "session":
+            case "turn_end":
+              break;
+            case "text":
+              options.onAssistantDelta?.(event.delta);
+              break;
+            case "thought":
+              options.onActivity?.({ type: "thought", delta: event.delta });
+              options.onStatus?.("Thinking");
+              break;
+            case "tool_call":
+              options.onActivity?.({
+                type: "tool_call",
+                id: event.id,
+                name: event.name,
+                args: event.args,
+              });
+              options.onStatus?.(`Using ${event.name}`);
+              break;
+            case "tool_result":
+              options.onActivity?.({
+                type: "tool_result",
+                id: event.id,
+                ok: event.ok,
+                output: event.output,
+              });
+              options.onStatus?.("Reading tool result");
+              break;
+            case "done":
+              options.onStatus?.("Done");
+              options.onDone?.();
+              break;
+            default:
+              break;
+          }
+        });
+      }).pipe(
+        Effect.catchAll((error) =>
+          Effect.sync(() => {
+            options.onError?.(
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          }).pipe(Effect.zipRight(Effect.fail(error))),
+        ),
+      ),
+    );
+
+    return loadDemoMessages(sessionId);
   } finally {
     if (progressListener) progressListeners.delete(progressListener);
   }
@@ -578,12 +649,68 @@ export interface DemoAttachmentInput {
   readonly file: File;
 }
 
-function getSpiderGateway(): SpiderGatewayClient {
-  spiderGateway ??= createSpiderGatewayClient(
-    new URL("./demo-spider.worker.ts", import.meta.url),
-    { name: "bud-demo-spider" },
+async function createDemoSessionHeader(
+  modelId: string,
+  thinkingLevel: ThinkingLevel | null,
+): Promise<SessionHeader> {
+  const bud = await getBud(modelId);
+  return Effect.runPromise(bud.createSession({ modelId, thinkingLevel }));
+}
+
+async function getSessions(): Promise<SessionsService> {
+  const bud = await getBud(getDemoSettings().modelId);
+  return bud.sessions;
+}
+
+function getBud(modelId = getDemoSettings().modelId): Promise<BudService> {
+  const cacheKey = JSON.stringify({ modelId });
+  const cached = budPromises.get(cacheKey);
+  if (cached) return cached;
+
+  const promise = Effect.runPromise(
+    Effect.gen(function* () {
+      return yield* Bud;
+    }).pipe(
+      Effect.provide(
+        BrowserBud.layer({
+          modelId,
+          objectStorage: {
+            databaseName: "bud-demo",
+            keyPrefix: "demo",
+          },
+          sessions: { namespace: "bud/demo/sessions" },
+          modelParams: {
+            maxTokens: 768,
+            temperature: 0.2,
+          },
+          webLLMProvider: getWebLLMProvider(),
+          anthropicProvider: ProviderProxy.make({
+            id: "anthropic",
+            stream: (args) =>
+              streamHostedProvider({
+                data: { provider: "anthropic", args },
+              }),
+          }),
+          openAIProvider: ProviderProxy.make({
+            id: "openai",
+            stream: (args) =>
+              streamHostedProvider({
+                data: { provider: "openai", args },
+              }),
+          }),
+          googleProvider: ProviderProxy.make({
+            id: "google",
+            stream: (args) =>
+              streamHostedProvider({
+                data: { provider: "google", args },
+              }),
+          }),
+        }),
+      ),
+    ),
   );
-  return spiderGateway;
+  budPromises.set(cacheKey, promise);
+  return promise;
 }
 
 function getWebLLMProvider(): LLM.WebLLMProviderService {
@@ -606,4 +733,233 @@ function parseProgress(status: string): number | null {
   const match = status.match(/(\d+)%/);
   if (!match) return null;
   return Math.min(100, Math.max(0, Number(match[1])));
+}
+
+async function titleForSession(summary: SessionSummary): Promise<string> {
+  const sessions = await getSessions();
+  const messages = await Effect.runPromise(
+    sessions.messages(summary.sessionId as SessionId),
+  );
+  const firstUserText = messages
+    .filter((message) => message.role === "user")
+    .map((message) => textFromParts(message.content))
+    .find((text) => text.trim().length > 0);
+  if (!firstUserText) return "New chat";
+  return firstUserText.length > 40
+    ? `${firstUserText.slice(0, 40).trim()}...`
+    : firstUserText;
+}
+
+function textFromParts(
+  parts: LLM.Text | readonly (LLM.UserContentPart | LLM.AssistantContentPart)[],
+): string {
+  const normalized = Array.isArray(parts) ? parts : [parts];
+  return normalized
+    .filter((part): part is LLM.Text => part.type === "text")
+    .map((part) => part.text)
+    .join("");
+}
+
+function activitiesFromAssistantParts(
+  idPrefix: string,
+  parts: LLM.Text | readonly (LLM.UserContentPart | LLM.AssistantContentPart)[],
+): readonly DemoActivity[] {
+  const normalized = Array.isArray(parts) ? parts : [parts];
+  const activities: DemoActivity[] = [];
+
+  for (const [index, part] of normalized.entries()) {
+    if (part.type === "thought") {
+      activities.push({
+        id: `${idPrefix}-thought-${index}`,
+        type: "thinking",
+        status: "done",
+        title: "Thinking",
+        content: part.thought,
+        position: "before_text",
+      });
+    }
+
+    if (part.type === "tool_call") {
+      activities.push({
+        id: part.id || `${idPrefix}-tool-${index}`,
+        type: "tool",
+        status: "done",
+        title: activityTitle(part.name),
+        input: parseToolArgs(part.args),
+        position: "before_text",
+      });
+    }
+  }
+
+  return activities;
+}
+
+function parseToolArgs(args: string): unknown {
+  try {
+    return JSON.parse(args);
+  } catch {
+    return args;
+  }
+}
+
+function activityTitle(name: string): string {
+  if (name === "computer") return "Computer";
+  return name
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+function attachmentsFromParts(
+  sessionId: SessionId,
+  parts: LLM.Text | readonly (LLM.UserContentPart | LLM.AssistantContentPart)[],
+): readonly DemoAttachment[] {
+  const normalized = Array.isArray(parts) ? parts : [parts];
+  return normalized.flatMap((part, index): DemoAttachment[] => {
+    if (part.type === "image") {
+      const source = part.source;
+      const mimeType =
+        "mimeType" in source ? source.mimeType : "application/octet-stream";
+      return [
+        {
+          id: `${sessionId}-attachment-${index}`,
+          name: `Image ${index + 1}`,
+          kind: "image",
+          mimeType,
+          url:
+            source.type === "base64_image_source"
+              ? `data:${source.mimeType};base64,${source.data}`
+              : source.type === "url_image_source"
+                ? source.url
+                : undefined,
+        },
+      ];
+    }
+
+    if (part.type === "audio") {
+      const source = part.source;
+      return [
+        {
+          id: `${sessionId}-attachment-${index}`,
+          name: `Audio ${index + 1}`,
+          kind: "audio",
+          mimeType: source.mimeType,
+          url:
+            source.type === "base64_audio_source"
+              ? `data:${source.mimeType};base64,${source.data}`
+              : undefined,
+        },
+      ];
+    }
+
+    if (part.type === "document") {
+      const source = part.source;
+      const mimeType =
+        source.type === "text_document_source" ||
+        source.type === "base64_document_source" ||
+        source.type === "object_storage_document_source"
+          ? source.mediaType
+          : "application/octet-stream";
+      return [
+        {
+          id: `${sessionId}-attachment-${index}`,
+          name: `Document ${index + 1}`,
+          kind: "document",
+          mimeType,
+          url:
+            source.type === "base64_document_source"
+              ? `data:${source.mediaType};base64,${source.data}`
+              : source.type === "url_document_source"
+                ? source.url
+                : undefined,
+        },
+      ];
+    }
+
+    return [];
+  });
+}
+
+async function attachmentsToContentParts(
+  attachments: readonly DemoAttachmentInput[],
+): Promise<LLM.UserContentPart[]> {
+  const parts: LLM.UserContentPart[] = [];
+
+  for (const attachment of attachments) {
+    const file = attachment.file;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const base64 = LLM.uint8ArrayToBase64(bytes);
+    const mimeType = file.type || "application/octet-stream";
+
+    if (mimeType.startsWith("image/")) {
+      parts.push({
+        type: "image",
+        source: {
+          type: "base64_image_source",
+          data: base64,
+          mimeType: mimeType as LLM.ImageMimeType,
+        },
+      });
+      continue;
+    }
+
+    if (mimeType.startsWith("audio/")) {
+      parts.push({
+        type: "audio",
+        source: {
+          type: "base64_audio_source",
+          data: base64,
+          mimeType: mimeType as LLM.AudioMimeType,
+        },
+      });
+      continue;
+    }
+
+    if (mimeType === "application/pdf") {
+      parts.push({
+        type: "document",
+        source: {
+          type: "base64_document_source",
+          data: base64,
+          mediaType: "application/pdf",
+        },
+      });
+      continue;
+    }
+
+    if (isTextAttachment(mimeType)) {
+      parts.push({
+        type: "document",
+        source: {
+          type: "text_document_source",
+          data: await file.text(),
+          mediaType: mimeType as LLM.DocumentTextMimeType,
+        },
+      });
+      continue;
+    }
+
+    parts.push({
+      type: "text",
+      text: `[Attached file: ${file.name || "file"} (${mimeType})]`,
+    });
+  }
+
+  return parts;
+}
+
+function isTextAttachment(mimeType: string): boolean {
+  return (
+    mimeType === "application/json" ||
+    mimeType === "text/plain" ||
+    mimeType === "application/x-javascript" ||
+    mimeType === "text/javascript" ||
+    mimeType === "application/x-python" ||
+    mimeType === "text/x-python" ||
+    mimeType === "text/html" ||
+    mimeType === "text/css" ||
+    mimeType === "text/xml" ||
+    mimeType === "text/rtf"
+  );
 }
