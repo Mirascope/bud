@@ -1,16 +1,23 @@
-import { CronMemory } from "./spiders/cron.memory.ts";
-import { IdentityMemory } from "./spiders/identity.memory.ts";
-import { JournalMemory } from "./spiders/journal.memory.ts";
+import { CronLocalStorage } from "../spiders/cron.local-storage.ts";
+import { IdentityLocalStorage } from "../spiders/identity.local-storage.ts";
+import { JournalLocalStorage } from "../spiders/journal.local-storage.ts";
 import { runCronCli } from "@bud/cron";
 import { runIdentityCli } from "@bud/identity";
 import { runJournalCli } from "@bud/journal";
+import { InMemory } from "@bud/object-storage";
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 
 const TestLayer = Layer.mergeAll(
-  IdentityMemory({ assistantName: "Bud" }),
-  JournalMemory({ now: () => "2026-01-01T00:00:00.000Z" }),
-  CronMemory({ now: () => "2026-01-01T00:00:00.000Z" }),
+  IdentityLocalStorage({ initial: { assistantName: "Bud" } }).pipe(
+    Layer.provide(InMemory.layer()),
+  ),
+  JournalLocalStorage({ now: () => "2026-01-01T00:00:00.000Z" }).pipe(
+    Layer.provide(InMemory.layer()),
+  ),
+  CronLocalStorage({ now: () => "2026-01-01T00:00:00.000Z" }).pipe(
+    Layer.provide(InMemory.layer()),
+  ),
 );
 
 const runTest = <A, E, R>(effect: Effect.Effect<A, E, R>) =>

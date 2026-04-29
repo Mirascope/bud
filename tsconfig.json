@@ -7,5 +7,5 @@
       "@bud/*": ["./packages/*/src"]
     }
   },
-  "include": ["src", "packages/*/src"]
+  "include": ["src", "spiders", "packages/*/src"]
 }

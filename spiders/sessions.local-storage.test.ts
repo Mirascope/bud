@@ -1,6 +1,7 @@
-import { Sessions, SessionsLocalStorage } from "./index.ts";
+import { SessionsLocalStorage } from "./sessions.local-storage.ts";
 import * as LLM from "@bud/llm";
 import { InMemory } from "@bud/object-storage";
+import { Sessions } from "@bud/sessions";
 import { expect, it } from "@bud/testing";
 import { Effect, Layer, Stream } from "effect";
 

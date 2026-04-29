@@ -1,23 +1,18 @@
 import {
   getHostedProviderAvailability,
-  streamHostedProvider,
   type HostedProviderAvailability,
 } from "./llm-proxy.ts";
 import * as LLM from "@bud/llm";
 import {
   type SessionHeader,
   type SessionId,
-  type SessionSummary,
-  type SessionsService,
   type ThinkingLevel,
 } from "@bud/sessions";
 import {
-  BrowserBud,
-  Bud,
-  ProviderProxy,
-  type BudService,
+  createSpiderGatewayClient,
+  type SpiderGatewayClient,
 } from "@mirascope/bud";
-import { Effect, Stream } from "effect";
+import { Effect } from "effect";
 
 export interface DemoMessage {
   readonly id: string;
@@ -55,23 +50,30 @@ export type DemoActivity =
       readonly status: "active" | "done" | "error";
       readonly title: string;
       readonly content: string;
+      readonly position?: "before_text" | "after_text";
     }
   | {
       readonly id: string;
       readonly type: "tool";
       readonly status: "active" | "done" | "error";
       readonly title: string;
+      readonly position?: "before_text" | "after_text";
       readonly input?: unknown;
       readonly output?: unknown;
     };
 
 export type DemoActivityEvent =
-  | { readonly type: "thought"; readonly delta: string }
+  | {
+      readonly type: "thought";
+      readonly delta: string;
+      readonly position?: "before_text" | "after_text";
+    }
   | {
       readonly type: "tool_call";
       readonly id: string;
       readonly name: string;
       readonly args: unknown;
+      readonly position?: "before_text" | "after_text";
     }
   | {
       readonly type: "tool_result";
@@ -83,8 +85,8 @@ export type DemoActivityEvent =
 const MODEL_ID = `web-llm/${LLM.WEB_LLM_DEFAULT_MODEL_ID}`;
 const SETTINGS_KEY = "bud/demo/settings";
 
-const budPromises = new Map<string, Promise<BudService>>();
 let webLLMProvider: LLM.WebLLMProviderService | null = null;
+let spiderGateway: SpiderGatewayClient | null = null;
 const progressListeners = new Set<(status: string) => void>();
 
 export interface DemoProviderSecrets {
@@ -406,7 +408,6 @@ export async function resetDemoModelPreparation(
 
   await Effect.runPromise(getWebLLMProvider().deleteCachedModel(modelId));
   window.localStorage.removeItem(localModelReadyKey(modelId));
-  budPromises.clear();
   return {
     ...getDemoModelPreparationStatus(modelId),
     cached: false,
@@ -446,25 +447,14 @@ function assertBrowserRuntimeSupport(): void {
 }
 
 export async function listDemoSessions(): Promise<DemoSession[]> {
-  const sessions = await getSessions();
-  const summaries = await Effect.runPromise(sessions.summarize("bud"));
-  const withTitles = await Promise.all(
-    summaries.map(async (summary) => ({
-      sessionId: summary.sessionId as SessionId,
-      title: await titleForSession(summary),
-      lastActiveAt: summary.lastActiveAt,
-    })),
-  );
-
-  return withTitles;
+  return getSpiderGateway().call<DemoSession[]>("listSessions");
 }
 
 export async function ensureDemoSession(
   sessionId?: SessionId,
 ): Promise<SessionId> {
   if (sessionId) {
-    const sessions = await getSessions();
-    await Effect.runPromise(sessions.open(sessionId));
+    await getSpiderGateway().call("openSession", { sessionId });
     return sessionId;
   }
 
@@ -477,63 +467,21 @@ export async function ensureDemoSession(
 
 export async function createDemoSession(): Promise<SessionId> {
   const settings = getDemoSettings();
-  const header = await createDemoSessionHeader(
-    settings.modelId,
-    settings.thinkingLevel,
-  );
+  const header = await getSpiderGateway().call<SessionHeader>("createSession", {
+    modelId: settings.modelId,
+    thinkingLevel: settings.thinkingLevel,
+  });
   return header.sessionId;
 }
 
 export async function deleteDemoSession(sessionId: SessionId): Promise<void> {
-  const sessions = await getSessions();
-  await Effect.runPromise(sessions.delete(sessionId));
+  await getSpiderGateway().call("deleteSession", { sessionId });
 }
 
 export async function loadDemoMessages(
   sessionId: SessionId,
 ): Promise<DemoMessage[]> {
-  const sessions = await getSessions();
-  const [messages, turns] = await Promise.all([
-    Effect.runPromise(sessions.messages(sessionId)),
-    Effect.runPromise(sessions.turns(sessionId)),
-  ]);
-  const messageTurns = turns.filter(
-    (turn) => turn.type === "user_turn" || turn.type === "assistant_turn",
-  );
-
-  return messages
-    .filter(
-      (message) => message.role === "user" || message.role === "assistant",
-    )
-    .map((message, index) => {
-      const turn = messageTurns[index];
-      return {
-        id: `${sessionId}-${index}`,
-        role: message.role,
-        content: textFromParts(message.content),
-        timestamp: turn?.timestamp ?? new Date(0).toISOString(),
-        attachments:
-          message.role === "user"
-            ? attachmentsFromParts(sessionId, message.content)
-            : undefined,
-        activities:
-          message.role === "assistant"
-            ? activitiesFromAssistantParts(
-                `${sessionId}-${index}`,
-                message.content,
-              )
-            : undefined,
-        modelId:
-          message.role === "assistant"
-            ? (message.modelId ?? getDemoSettings().modelId)
-            : undefined,
-        thinkingLevel:
-          message.role === "assistant"
-            ? getDemoSettings().thinkingLevel
-            : undefined,
-        isComplete: message.role === "assistant" ? true : undefined,
-      };
-    });
+  return getSpiderGateway().call<DemoMessage[]>("loadMessages", { sessionId });
 }
 
 export async function addDemoExchange(
@@ -557,78 +505,70 @@ export async function addDemoExchange(
     });
   if (progressListener) progressListeners.add(progressListener);
 
-  const content: LLM.UserContentPart[] = userText
-    ? [{ type: "text", text: userText }]
-    : [];
   try {
-    content.push(...(await attachmentsToContentParts(attachments)));
-
     const settings = getDemoSettings();
     const modelId = options.modelId ?? settings.modelId;
     const thinkingLevel = options.thinkingLevel ?? settings.thinkingLevel;
-    const bud = await getBud(modelId);
-    const stream = await Effect.runPromise(
-      bud.stream({
+    return await getSpiderGateway().stream<DemoMessage[]>(
+      "addExchange",
+      {
         sessionId,
         modelId,
         thinkingLevel,
-        message: LLM.user(content),
-      }),
-    );
-
-    await Effect.runPromise(
-      Stream.runForEach(stream, (event) => {
+        userText,
+        attachments,
+      },
+      (rawEvent) => {
+        const event = rawEvent as
+          | { readonly type: "status"; readonly status: string }
+          | { readonly type: string; readonly [key: string]: unknown };
+        if (event.type === "status") {
+          options.onStatus?.(event.status);
+          return;
+        }
         if (event.type === "error") {
-          return Effect.fail(new Error(event.message));
+          options.onError?.(new Error(String(event.message)));
+          return;
         }
 
-        return Effect.sync(() => {
-          switch (event.type) {
-            case "text":
-              options.onAssistantDelta?.(event.delta);
-              break;
-            case "thought":
-              options.onActivity?.({ type: "thought", delta: event.delta });
-              options.onStatus?.("Thinking");
-              break;
-            case "tool_call":
-              options.onActivity?.({
-                type: "tool_call",
-                id: event.id,
-                name: event.name,
-                args: event.args,
-              });
-              options.onStatus?.(`Using ${event.name}`);
-              break;
-            case "tool_result":
-              options.onActivity?.({
-                type: "tool_result",
-                id: event.id,
-                ok: event.ok,
-                output: event.output,
-              });
-              options.onStatus?.("Reading tool result");
-              break;
-            case "done":
-              options.onStatus?.("Done");
-              options.onDone?.();
-              break;
-            default:
-              break;
-          }
-        });
-      }).pipe(
-        Effect.catchAll((error) =>
-          Effect.sync(() => {
-            options.onError?.(
-              error instanceof Error ? error : new Error(String(error)),
-            );
-          }).pipe(Effect.zipRight(Effect.fail(error))),
-        ),
-      ),
+        switch (event.type) {
+          case "text":
+            options.onAssistantDelta?.(String(event.delta ?? ""));
+            break;
+          case "thought":
+            options.onActivity?.({
+              type: "thought",
+              delta: String(event.delta ?? ""),
+            });
+            options.onStatus?.("Thinking");
+            break;
+          case "tool_call":
+            options.onActivity?.({
+              type: "tool_call",
+              id: String(event.id),
+              name: String(event.name),
+              args: event.args,
+            });
+            options.onStatus?.(`Using ${String(event.name)}`);
+            break;
+          case "tool_result":
+            options.onActivity?.({
+              type: "tool_result",
+              id: String(event.id),
+              ok: event.ok === true,
+              output: event.output,
+            });
+            options.onStatus?.("Reading tool result");
+            break;
+          case "done":
+            options.onStatus?.("Done");
+            options.onDone?.();
+            break;
+          default:
+            break;
+        }
+      },
     );
-
-    return loadDemoMessages(sessionId);
   } finally {
     if (progressListener) progressListeners.delete(progressListener);
   }
@@ -638,68 +578,12 @@ export interface DemoAttachmentInput {
   readonly file: File;
 }
 
-async function createDemoSessionHeader(
-  modelId: string,
-  thinkingLevel: ThinkingLevel | null,
-): Promise<SessionHeader> {
-  const bud = await getBud(modelId);
-  return Effect.runPromise(bud.createSession({ modelId, thinkingLevel }));
-}
-
-async function getSessions(): Promise<SessionsService> {
-  const bud = await getBud(getDemoSettings().modelId);
-  return bud.sessions;
-}
-
-function getBud(modelId = getDemoSettings().modelId): Promise<BudService> {
-  const cacheKey = JSON.stringify({ modelId });
-  const cached = budPromises.get(cacheKey);
-  if (cached) return cached;
-
-  const promise = Effect.runPromise(
-    Effect.gen(function* () {
-      return yield* Bud;
-    }).pipe(
-      Effect.provide(
-        BrowserBud.layer({
-          modelId,
-          objectStorage: {
-            databaseName: "bud-demo",
-            keyPrefix: "demo",
-          },
-          sessions: { namespace: "bud/demo/sessions" },
-          modelParams: {
-            maxTokens: 768,
-            temperature: 0.2,
-          },
-          webLLMProvider: getWebLLMProvider(),
-          anthropicProvider: ProviderProxy.make({
-            id: "anthropic",
-            stream: (args) =>
-              streamHostedProvider({
-                data: { provider: "anthropic", args },
-              }),
-          }),
-          openAIProvider: ProviderProxy.make({
-            id: "openai",
-            stream: (args) =>
-              streamHostedProvider({
-                data: { provider: "openai", args },
-              }),
-          }),
-          googleProvider: ProviderProxy.make({
-            id: "google",
-            stream: (args) =>
-              streamHostedProvider({
-                data: { provider: "google", args },
-              }),
-          }),
-        }),
-      ),
-    ),
+function getSpiderGateway(): SpiderGatewayClient {
+  spiderGateway ??= createSpiderGatewayClient(
+    new URL("./demo-spider.worker.ts", import.meta.url),
+    { name: "bud-demo-spider" },
   );
-  budPromises.set(cacheKey, promise);
-  return promise;
+  return spiderGateway;
 }
 
 function getWebLLMProvider(): LLM.WebLLMProviderService {
@@ -722,192 +606,4 @@ function parseProgress(status: string): number | null {
   const match = status.match(/(\d+)%/);
   if (!match) return null;
   return Math.min(100, Math.max(0, Number(match[1])));
-}
-
-async function titleForSession(summary: SessionSummary): Promise<string> {
-  const messages = await loadDemoMessages(summary.sessionId as SessionId);
-  const firstUserMessage = messages.find((message) => message.role === "user");
-  return truncateTitle(firstUserMessage?.content || "Attachment");
-}
-
-function truncateTitle(title: string): string {
-  const normalized = title.replace(/\s+/g, " ").trim();
-  if (normalized.length <= 42) return normalized;
-  return `${normalized.slice(0, 39)}...`;
-}
-
-function textFromParts(
-  parts: readonly { readonly type: string; readonly text?: string }[],
-): string {
-  const text = parts
-    .filter(
-      (part): part is { readonly type: "text"; readonly text: string } =>
-        part.type === "text" && typeof part.text === "string",
-    )
-    .map((part) => part.text)
-    .join("");
-  return text;
-}
-
-function activitiesFromAssistantParts(
-  messageId: string,
-  parts: readonly LLM.AssistantContentPart[],
-): readonly DemoActivity[] {
-  const activities: DemoActivity[] = [];
-  let thoughtIndex = 0;
-
-  for (const part of parts) {
-    if (part.type === "thought") {
-      activities.push({
-        id: `${messageId}-thinking-${thoughtIndex++}`,
-        type: "thinking",
-        status: "done",
-        title: "Thinking",
-        content: part.thought,
-      });
-      continue;
-    }
-
-    if (part.type === "tool_call") {
-      activities.push({
-        id: `${messageId}-tool-${part.id}`,
-        type: "tool",
-        status: "done",
-        title: part.name,
-        input: safeParseJson(part.args),
-      });
-    }
-  }
-
-  return activities;
-}
-
-function safeParseJson(value: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-}
-
-function attachmentsFromParts(
-  sessionId: SessionId,
-  parts: readonly LLM.UserContentPart[],
-): readonly DemoAttachment[] {
-  return parts.flatMap((part, index): readonly DemoAttachment[] => {
-    const id = `${sessionId}-attachment-${index}`;
-
-    switch (part.type) {
-      case "image":
-        return [
-          {
-            id,
-            kind: "image",
-            name: "Image",
-            mimeType:
-              "mimeType" in part.source ? part.source.mimeType : "image/*",
-            url:
-              part.source.type === "base64_image_source"
-                ? dataUrl(part.source.mimeType, part.source.data)
-                : part.source.type === "url_image_source"
-                  ? part.source.url
-                  : undefined,
-          },
-        ];
-
-      case "audio":
-        return [
-          {
-            id,
-            kind: "audio",
-            name: "Audio",
-            mimeType: part.source.mimeType,
-            url:
-              part.source.type === "base64_audio_source"
-                ? dataUrl(part.source.mimeType, part.source.data)
-                : undefined,
-          },
-        ];
-
-      case "document":
-        return [
-          {
-            id,
-            kind: "document",
-            name:
-              part.source.type === "base64_document_source" &&
-              part.source.mediaType === "application/pdf"
-                ? "PDF"
-                : "Document",
-            mimeType:
-              "mediaType" in part.source
-                ? part.source.mediaType
-                : "application/octet-stream",
-          },
-        ];
-
-      default:
-        return [];
-    }
-  });
-}
-
-async function attachmentsToContentParts(
-  attachments: readonly DemoAttachmentInput[],
-): Promise<LLM.UserContentPart[]> {
-  const parts: LLM.UserContentPart[] = [];
-
-  for (const attachment of attachments) {
-    const bytes = new Uint8Array(await attachment.file.arrayBuffer());
-    const contentPart = contentPartFromFile(attachment.file, bytes);
-    if (contentPart) parts.push(contentPart);
-  }
-
-  return parts;
-}
-
-function contentPartFromFile(
-  file: File,
-  bytes: Uint8Array,
-): LLM.UserContentPart | null {
-  if (file.type.startsWith("image/")) {
-    return LLM.imageFromBytes(bytes);
-  }
-
-  if (file.type.startsWith("audio/")) {
-    return LLM.audioFromBytes(bytes);
-  }
-
-  const documentMimeType = documentMimeTypeForFile(file);
-  if (documentMimeType) {
-    return LLM.documentFromBytes(bytes, { mimeType: documentMimeType });
-  }
-
-  return null;
-}
-
-function documentMimeTypeForFile(
-  file: File,
-): LLM.DocumentTextMimeType | LLM.DocumentBase64MimeType | null {
-  if (file.type === "application/pdf") return "application/pdf";
-  if (file.type === "application/json") return "application/json";
-  if (file.type === "text/plain") return "text/plain";
-  if (file.type === "text/javascript") return "text/javascript";
-  if (file.type === "text/html") return "text/html";
-  if (file.type === "text/css") return "text/css";
-  if (file.type === "text/xml") return "text/xml";
-  if (file.type === "text/rtf") return "text/rtf";
-
-  const extension = file.name.slice(file.name.lastIndexOf("."));
-  if (!extension) return null;
-
-  try {
-    return LLM.mimeTypeFromExtension(extension);
-  } catch {
-    return null;
-  }
-}
-
-function dataUrl(mimeType: string, data: string): string {
-  return `data:${mimeType};base64,${data}`;
 }

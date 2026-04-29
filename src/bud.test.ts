@@ -1,8 +1,9 @@
+import { CronLocalStorage } from "../spiders/cron.local-storage.ts";
+import { GatewaySpider } from "../spiders/gateway.spider.ts";
+import { IdentityLocalStorage } from "../spiders/identity.local-storage.ts";
+import { JournalLocalStorage } from "../spiders/journal.local-storage.ts";
+import { SessionsLocalStorage } from "../spiders/sessions.local-storage.ts";
 import { Bud } from "./bud.ts";
-import { CronMemory } from "./spiders/cron.memory.ts";
-import { GatewaySpider } from "./spiders/gateway.spider.ts";
-import { IdentityMemory } from "./spiders/identity.memory.ts";
-import { JournalMemory } from "./spiders/journal.memory.ts";
 import {
   Computer,
   makeComputerError,
@@ -10,7 +11,7 @@ import {
 } from "@bud/computer";
 import * as LLM from "@bud/llm";
 import { InMemory } from "@bud/object-storage";
-import { Sessions, SessionsLocalStorage } from "@bud/sessions";
+import { Sessions } from "@bud/sessions";
 import { expect, it } from "@bud/testing";
 import { Effect, Layer, Stream } from "effect";
 
@@ -45,7 +46,8 @@ function makeLayer(provider: LLM.ProviderService): Layer.Layer<Bud | Sessions> {
   const model = LLM.Model.layerWithDefaultPricing({
     modelId: "mock/model",
   }).pipe(Layer.provide(registry));
-  const sessions = SessionsLocalStorage().pipe(Layer.provide(InMemory.layer()));
+  const storage = InMemory.layer();
+  const sessions = SessionsLocalStorage().pipe(Layer.provide(storage));
 
   return Layer.mergeAll(
     Bud.layer({
@@ -60,9 +62,9 @@ function makeLayer(provider: LLM.ProviderService): Layer.Layer<Bud | Sessions> {
         sessions,
         model,
         LLM.ModelInfoDefault,
-        IdentityMemory(),
-        JournalMemory(),
-        CronMemory(),
+        IdentityLocalStorage().pipe(Layer.provide(storage)),
+        JournalLocalStorage().pipe(Layer.provide(storage)),
+        CronLocalStorage().pipe(Layer.provide(storage)),
         GatewaySpider(),
         Layer.succeed(Computer, makeComputer()),
       ),

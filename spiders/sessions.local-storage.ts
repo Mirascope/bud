@@ -1,16 +1,27 @@
-import { formatCompactSummary, getCompactPrompt } from "./compact-prompt.ts";
-import { messagesFromSegmentEntries } from "./entries-to-messages.ts";
-import { groupExchanges } from "./exchange.ts";
+import {
+  formatCompactSummary,
+  getCompactPrompt,
+} from "../packages/sessions/src/compact-prompt.ts";
+import { messagesFromSegmentEntries } from "../packages/sessions/src/entries-to-messages.ts";
+import { groupExchanges } from "../packages/sessions/src/exchange.ts";
 import {
   hashPromptSnapshot,
   normalize as normalizePromptSnapshot,
-} from "./prompt-snapshot.ts";
+} from "../packages/sessions/src/prompt-snapshot.ts";
 import type {
   ScanSegmentOptions,
   ScanSegmentResult,
   SegmentInfo,
   SegmentsService,
-} from "./segments.schemas.ts";
+} from "../packages/sessions/src/segments.schemas.ts";
+import { WebCrypto, type CryptoService } from "@bud/crypto";
+import * as LLM from "@bud/llm";
+import {
+  base64ToBytes,
+  bytesToBase64,
+  ObjectStorage,
+  type ObjectStorageService,
+} from "@bud/object-storage";
 import {
   type AssistantTurn,
   type CompactionTurn,
@@ -29,15 +40,7 @@ import {
   type Turn,
   type UserTurn,
   scopeFromSessionId,
-} from "./sessions.schemas.ts";
-import { WebCrypto, type CryptoService } from "@bud/crypto";
-import * as LLM from "@bud/llm";
-import {
-  base64ToBytes,
-  bytesToBase64,
-  ObjectStorage,
-  type ObjectStorageService,
-} from "@bud/object-storage";
+} from "@bud/sessions";
 import { Effect, Layer } from "effect";
 
 export interface SessionsLocalStorageOptions {

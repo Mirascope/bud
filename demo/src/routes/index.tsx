@@ -825,6 +825,12 @@ function HomePage() {
         );
       };
       const updateAssistantActivity = (event: DemoActivityEvent) => {
+        const position =
+          assistantText.length > 0 ? "after_text" : "before_text";
+        const eventWithPosition =
+          event.type === "thought" || event.type === "tool_call"
+            ? ({ ...event, position } satisfies DemoActivityEvent)
+            : event;
         setMessages((current) =>
           current.map((message) =>
             message.id === assistantMessageId
@@ -833,7 +839,7 @@ function HomePage() {
                   isPending: false,
                   activities: applyActivityEvent(
                     message.activities ?? [],
-                    event,
+                    eventWithPosition,
                   ),
                 }
               : message,
@@ -1176,7 +1182,7 @@ function HomePage() {
         >
           <aside
             className={cn(
-              "flex h-full w-72 -translate-x-full flex-col border-r border-border bg-accent/95 p-3 shadow-xl backdrop-blur transition-transform duration-150 group-focus-within/sidebar:translate-x-0",
+              "flex h-full w-72 -translate-x-full flex-col border-r border-border bg-accent/95 p-3 shadow-xl backdrop-blur transition-transform duration-150 group-focus-within/sidebar:translate-x-0 dark:bg-card/95",
               isSidebarHoverArmed &&
                 "group-hover/sidebar:translate-x-0 group-hover/sidebar:delay-150",
               !isSidebarCollapsed && "md:translate-x-0 md:shadow-none",
@@ -1370,7 +1376,7 @@ function HomePage() {
             )}
           >
             <form
-              className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-md border border-input bg-background p-3 shadow-[0_8px_32px_rgb(0_0_0/0.08)] transition-colors focus-within:border-ring"
+              className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-md border border-input bg-background p-2 shadow-[0_8px_32px_rgb(0_0_0/0.08)] transition-colors focus-within:border-ring dark:bg-card dark:shadow-[0_16px_48px_rgb(0_0_0/0.35)]"
               onSubmit={handleSubmit}
               ref={formRef}
             >
@@ -1387,7 +1393,7 @@ function HomePage() {
                   type="file"
                 />
                 <Textarea
-                  className="max-h-48 min-h-8 w-full resize-none border-0 bg-transparent p-0 text-[16px] leading-6 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 md:text-[15px]"
+                  className="max-h-48 !min-h-6 w-full resize-none border-0 bg-transparent p-0 text-[16px] leading-6 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 md:text-[15px]"
                   disabled={
                     isLoading ||
                     !canUseSelectedModel(
@@ -1412,29 +1418,27 @@ function HomePage() {
                   onRemove={handleRemoveAttachment}
                 />
               )}
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    aria-label="Attach files"
-                    className="rounded-md"
-                    disabled={
-                      isLoading ||
-                      isSending ||
-                      !canUseSelectedModel(
-                        demoSettings,
-                        modelPreparation.ready,
-                        modelOptions,
-                      )
-                    }
-                    onClick={() => attachmentInputRef.current?.click()}
-                    size="icon-sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    <Paperclip className="size-4" />
-                  </Button>
-                </div>
-                <div className="flex items-center justify-end gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  aria-label="Attach files"
+                  className="shrink-0 rounded-md"
+                  disabled={
+                    isLoading ||
+                    isSending ||
+                    !canUseSelectedModel(
+                      demoSettings,
+                      modelPreparation.ready,
+                      modelOptions,
+                    )
+                  }
+                  onClick={() => attachmentInputRef.current?.click()}
+                  size="icon-sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <Paperclip className="size-4" />
+                </Button>
+                <div className="ml-auto flex min-w-0 items-center justify-end gap-2">
                   <ModelPicker
                     localModelReady={modelPreparation.ready}
                     models={modelOptions}
@@ -1450,7 +1454,7 @@ function HomePage() {
                   )}
                   <Button
                     aria-label="Send message"
-                    className="rounded-md"
+                    className="shrink-0 rounded-md"
                     disabled={!canSend}
                     size="icon-sm"
                     type="submit"
@@ -1532,9 +1536,14 @@ function MessageArticle({
           />
         )}
         {message.role === "assistant" &&
-          (message.activities?.length ?? 0) > 0 && (
+          (message.activities?.some(
+            (activity) => activity.position !== "after_text",
+          ) ??
+            false) && (
             <ActivityList
-              activities={message.activities ?? []}
+              activities={(message.activities ?? []).filter(
+                (activity) => activity.position !== "after_text",
+              )}
               hasAssistantText={message.content.length > 0}
             />
           )}
@@ -1576,6 +1585,18 @@ function MessageArticle({
             </div>
           )
         )}
+        {message.role === "assistant" &&
+          (message.activities?.some(
+            (activity) => activity.position === "after_text",
+          ) ??
+            false) && (
+            <ActivityList
+              activities={(message.activities ?? []).filter(
+                (activity) => activity.position === "after_text",
+              )}
+              hasAssistantText={message.content.length > 0}
+            />
+          )}
         {message.role === "assistant" &&
           message.modelId &&
           message.isComplete && (
@@ -2081,8 +2102,11 @@ function applyActivityEvent(
 ): readonly DemoActivity[] {
   switch (event.type) {
     case "thought": {
+      const position = event.position ?? "before_text";
       const existing = activities.find(
-        (activity) => activity.type === "thinking",
+        (activity) =>
+          activity.type === "thinking" &&
+          (activity.position ?? "before_text") === position,
       );
       if (!existing) {
         return [
@@ -2093,6 +2117,7 @@ function applyActivityEvent(
             status: "active",
             title: "Thinking",
             content: event.delta,
+            position,
           },
         ];
       }
@@ -2109,7 +2134,7 @@ function applyActivityEvent(
     }
 
     case "tool_call": {
-      const title = `Using ${event.name}`;
+      const title = activityTitle(event.name);
       const withoutDuplicate = activities.filter(
         (activity) => activity.id !== event.id,
       );
@@ -2120,6 +2145,7 @@ function applyActivityEvent(
           type: "tool",
           status: "active",
           title,
+          position: event.position ?? "before_text",
           input: event.args,
         },
       ];
@@ -2136,6 +2162,15 @@ function applyActivityEvent(
           : activity,
       );
   }
+}
+
+function activityTitle(name: string): string {
+  if (name === "computer") return "Computer";
+  return name
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
 }
 
 function completeActiveThinkingActivities(

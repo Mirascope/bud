@@ -12,9 +12,15 @@ export {
   BrowserBud,
   DEFAULT_BROWSER_BUD_SYSTEM_PROMPT,
   type BrowserBudOptions,
-} from "./spiders/bud.browser.ts";
+} from "../spiders/bud.browser.ts";
 
 export {
   ProviderProxy,
   type ProviderProxyOptions,
-} from "./spiders/provider.proxy.ts";
+} from "../spiders/provider.proxy.ts";
+
+export {
+  SpiderGatewayClient,
+  createSpiderGatewayClient,
+  type SpiderGatewayStreamHandler,
+} from "../spiders/gateway.shared-worker.ts";

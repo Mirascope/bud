@@ -24,6 +24,7 @@
     "@bud/agent": "workspace:*",
     "@bud/computer": "workspace:*",
     "@bud/cron": "workspace:*",
+    "@bud/crypto": "workspace:*",
     "@bud/gateway": "workspace:*",
     "@bud/identity": "workspace:*",
     "@bud/journal": "workspace:*",

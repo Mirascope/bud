@@ -59,5 +59,35 @@ export function messagesFromSegmentEntries(
     }
   }
 
-  return messages;
+  return stripDanglingToolCalls(messages);
+}
+
+function stripDanglingToolCalls(
+  messages: readonly LLM.Message[],
+): LLM.Message[] {
+  return messages.flatMap((message, index): readonly LLM.Message[] => {
+    if (message.role !== "assistant") return [message];
+
+    const toolCallIds = message.content
+      .filter((part): part is LLM.ToolCall => part.type === "tool_call")
+      .map((part) => part.id);
+    if (toolCallIds.length === 0) return [message];
+
+    const next = messages[index + 1];
+    const outputIds =
+      next?.role === "user"
+        ? new Set(
+            next.content
+              .filter(
+                (part): part is LLM.ToolOutput => part.type === "tool_output",
+              )
+              .map((part) => part.id),
+          )
+        : new Set<string>();
+    const hasAllOutputs = toolCallIds.every((id) => outputIds.has(id));
+    if (hasAllOutputs) return [message];
+
+    const content = message.content.filter((part) => part.type !== "tool_call");
+    return content.length > 0 ? [{ ...message, content }] : [];
+  });
 }

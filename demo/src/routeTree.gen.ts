@@ -10,33 +10,43 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiLlmProxyRouteImport } from './routes/api.llm-proxy'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiLlmProxyRoute = ApiLlmProxyRouteImport.update({
+  id: '/api/llm-proxy',
+  path: '/api/llm-proxy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/llm-proxy': typeof ApiLlmProxyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/llm-proxy': typeof ApiLlmProxyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/llm-proxy': typeof ApiLlmProxyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/api/llm-proxy'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/api/llm-proxy'
+  id: '__root__' | '/' | '/api/llm-proxy'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiLlmProxyRoute: typeof ApiLlmProxyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +58,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/llm-proxy': {
+      id: '/api/llm-proxy'
+      path: '/api/llm-proxy'
+      fullPath: '/api/llm-proxy'
+      preLoaderRoute: typeof ApiLlmProxyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiLlmProxyRoute: ApiLlmProxyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

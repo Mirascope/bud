@@ -1,18 +1,18 @@
-import { Bud, type BudConfig } from "../bud.ts";
-import { CronMemory } from "./cron.memory.ts";
+import { Bud, type BudConfig } from "../src/bud.ts";
+import { CronLocalStorage } from "./cron.local-storage.ts";
 import { GatewaySpider } from "./gateway.spider.ts";
-import { IdentityMemory } from "./identity.memory.ts";
-import { JournalMemory } from "./journal.memory.ts";
+import { IdentityLocalStorage } from "./identity.local-storage.ts";
+import { JournalLocalStorage } from "./journal.local-storage.ts";
+import {
+  SessionsLocalStorage,
+  type SessionsLocalStorageOptions,
+} from "./sessions.local-storage.ts";
 import {
   WebContainerComputer,
   type WebContainerComputerOptions,
 } from "@bud/computer";
 import * as LLM from "@bud/llm";
 import { IndexedDB, type IndexedDBOptions } from "@bud/object-storage";
-import {
-  SessionsLocalStorage,
-  type SessionsLocalStorageOptions,
-} from "@bud/sessions";
 import { Layer } from "effect";
 
 export interface BrowserBudOptions
@@ -101,9 +101,15 @@ export const BrowserBud = {
 
     const dependencies = Layer.mergeAll(
       WebContainerComputer.layer(options.computer),
-      IdentityMemory(),
-      JournalMemory(),
-      CronMemory(),
+      IdentityLocalStorage({ namespace: "bud/demo/identity" }).pipe(
+        Layer.provide(storage),
+      ),
+      JournalLocalStorage({ namespace: "bud/demo/journal" }).pipe(
+        Layer.provide(storage),
+      ),
+      CronLocalStorage({ namespace: "bud/demo/cron" }).pipe(
+        Layer.provide(storage),
+      ),
       GatewaySpider(),
       sessions,
       model,

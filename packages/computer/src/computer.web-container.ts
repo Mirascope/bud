@@ -27,6 +27,7 @@ export interface WebContainerComputerOptions {
   readonly boot?: Parameters<typeof WebContainer.boot>[0];
   readonly store?: WorkspaceStore;
   readonly now?: () => string;
+  readonly bootTimeoutMs?: number;
 }
 
 interface TerminalState {
@@ -161,13 +162,28 @@ export const WebContainerComputer = {
   make: (options: WebContainerComputerOptions = {}): ComputerService => {
     const store = options.store ?? IndexedDBWorkspaceStore.make();
     const now = options.now ?? (() => new Date().toISOString());
+    const bootTimeoutMs = options.bootTimeoutMs ?? 15_000;
     let runtime: Promise<Runtime> | undefined;
     let terminalSequence = 0;
 
     const getRuntime = async (): Promise<Runtime> => {
       runtime ??= (async () => {
+        if (
+          typeof globalThis.crossOriginIsolated === "boolean" &&
+          !globalThis.crossOriginIsolated
+        ) {
+          throw makeComputerError({
+            message:
+              "Browser computer requires cross-origin isolation. Try this demo in Chrome directly, or use a hosted computer implementation.",
+            kind: "terminal_unavailable",
+          });
+        }
         const [container, snapshot] = await Promise.all([
-          WebContainer.boot(options.boot),
+          withTimeout(
+            WebContainer.boot(options.boot),
+            bootTimeoutMs,
+            "Timed out starting browser computer",
+          ),
           store.load(),
         ]);
         const metadata = normalizeMetadata(snapshot?.metadata);
@@ -528,3 +544,17 @@ export const WebContainerComputer = {
   layer: (options?: WebContainerComputerOptions): Layer.Layer<Computer> =>
     Layer.succeed(Computer, WebContainerComputer.make(options)),
 };
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+}

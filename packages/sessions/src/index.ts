@@ -57,9 +57,3 @@ export {
   messagesFromSegmentEntries,
   responseDataToAssistantMessage,
 } from "./entries-to-messages.ts";
-
-export {
-  makeSessionsLocalStorage,
-  SessionsLocalStorage,
-  type SessionsLocalStorageOptions,
-} from "./sessions.local-storage.ts";

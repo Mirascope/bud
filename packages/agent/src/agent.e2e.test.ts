@@ -1,3 +1,4 @@
+import { SessionsLocalStorage } from "../../../spiders/sessions.local-storage.ts";
 import { Agent } from "./agent.ts";
 import { Compaction } from "./compaction.ts";
 import { System } from "./system.ts";
@@ -12,7 +13,7 @@ import {
 } from "@bud/computer";
 import * as LLM from "@bud/llm";
 import { InMemory } from "@bud/object-storage";
-import { Sessions, SessionsLocalStorage } from "@bud/sessions";
+import { Sessions } from "@bud/sessions";
 import { expect, it } from "@bud/testing";
 import { Tools } from "@bud/tools";
 import { Effect, Layer, Schema, Stream } from "effect";
