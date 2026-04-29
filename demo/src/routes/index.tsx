@@ -516,14 +516,14 @@ function ModelProviderIcon({
 }) {
   if (provider === "local") {
     return (
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
-        <Cpu className="size-4" />
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
+        <Cpu className="size-5" />
       </span>
     );
   }
 
   return (
-    <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-[13px] font-semibold text-accent-foreground">
+    <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-accent text-[15px] font-semibold text-accent-foreground">
       {provider === "anthropic" ? "A" : provider === "openai" ? "◎" : "G"}
     </span>
   );
