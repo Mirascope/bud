@@ -1,11 +1,11 @@
-import { runComputerCli } from "@bud/computer";
+import { runComputerCli } from "./runner.ts";
 import * as LLM from "@bud/llm";
 import { Effect, Schema } from "effect";
 
 export const computerTool = LLM.defineTool({
   name: "computer",
   description: [
-    "Run workspace file operations and terminal commands through Bud's computer.",
+    "Run workspace file operations and terminal commands through the computer service.",
     "Use `computer --help` for top-level help, or `computer <command> --help` for command-specific flags.",
     "Commands:",
     "- `computer list [--path <path>]` - list workspace files.",

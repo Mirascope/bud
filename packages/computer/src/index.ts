@@ -1,6 +1,7 @@
 export * from "./computer.ts";
 export { computerCommand } from "./cli.ts";
 export { runComputerCli, runComputerCliArgv, tokenize } from "./runner.ts";
+export { computerTool } from "./tools.ts";
 export {
   WebContainerComputer,
   type WebContainerComputerOptions,

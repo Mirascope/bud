@@ -5,6 +5,7 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "paths": {
+      "@mirascope/bud": ["../src/index.ts"],
       "@bud/*": ["../packages/*/src"],
       "@demo/*": ["./src/*"]
     }

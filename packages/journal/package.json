@@ -1,5 +1,5 @@
 {
-  "name": "@bud/agent",
+  "name": "@bud/journal",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,13 +10,9 @@
   },
   "dependencies": {
     "@bud/llm": "workspace:*",
-    "@bud/sessions": "workspace:*",
     "@bud/tools": "workspace:*",
+    "@effect/cli": "^0.73.2",
+    "@effect/platform": "^0.94.5",
     "effect": "^3.19.18"
-  },
-  "devDependencies": {
-    "@bud/computer": "workspace:*",
-    "@bud/object-storage": "workspace:*",
-    "@bud/testing": "workspace:*"
   }
 }

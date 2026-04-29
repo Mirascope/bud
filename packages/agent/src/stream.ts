@@ -1,7 +1,6 @@
 import { Compaction } from "./compaction.ts";
 import type { AgentStreamEvent } from "./stream-events.ts";
 import { System, systemPromptText } from "./system.ts";
-import { Tools } from "./tools.ts";
 import * as LLM from "@bud/llm";
 import {
   Sessions,
@@ -9,6 +8,7 @@ import {
   type SessionId,
   type ThinkingLevel,
 } from "@bud/sessions";
+import { Tools } from "@bud/tools";
 import { Effect, Queue, Stream } from "effect";
 
 export interface AgentStreamConfig {

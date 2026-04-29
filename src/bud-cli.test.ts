@@ -1,14 +1,16 @@
-import { Cron } from "./cron.ts";
-import { runCronCli, runIdentityCli, runJournalCli } from "./domain-cli.ts";
-import { Identity } from "./identity.ts";
-import { Journal } from "./journal.ts";
+import { CronMemory } from "./spiders/cron.memory.ts";
+import { IdentityMemory } from "./spiders/identity.memory.ts";
+import { JournalMemory } from "./spiders/journal.memory.ts";
+import { runCronCli } from "@bud/cron";
+import { runIdentityCli } from "@bud/identity";
+import { runJournalCli } from "@bud/journal";
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 
 const TestLayer = Layer.mergeAll(
-  Identity.memory({ assistantName: "Bud" }),
-  Journal.memory({ now: () => "2026-01-01T00:00:00.000Z" }),
-  Cron.memory({ now: () => "2026-01-01T00:00:00.000Z" }),
+  IdentityMemory({ assistantName: "Bud" }),
+  JournalMemory({ now: () => "2026-01-01T00:00:00.000Z" }),
+  CronMemory({ now: () => "2026-01-01T00:00:00.000Z" }),
 );
 
 const runTest = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
@@ -30,7 +32,7 @@ describe("domain CLIs", () => {
   it("records and searches journal entries", async () => {
     const result = await runTest(
       Effect.gen(function* () {
-        yield* runJournalCli("add shipped abstractions");
+        yield* runJournalCli("add 'shipped abstractions'");
         return yield* runJournalCli("search abstractions");
       }),
     );
@@ -42,7 +44,7 @@ describe("domain CLIs", () => {
     const result = await runTest(
       Effect.gen(function* () {
         const scheduled = yield* runCronCli(
-          "schedule standup daily 'journal add checked in'",
+          "schedule --title standup --schedule daily --command 'journal add checked in'",
         );
         const id = JSON.parse(scheduled).id as string;
         return yield* runCronCli(`trigger ${id}`);

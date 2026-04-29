@@ -5,7 +5,7 @@ export interface ToolsService {
   readonly tools: Effect.Effect<readonly LLM.AnyTool[]>;
 }
 
-export class Tools extends Context.Tag("@bud/agent/Tools")<
+export class Tools extends Context.Tag("@bud/tools/Tools")<
   Tools,
   ToolsService
 >() {

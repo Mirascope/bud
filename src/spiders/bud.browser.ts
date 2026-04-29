@@ -1,7 +1,8 @@
-import { Bud, type BudConfig } from "./bud.ts";
-import { Cron } from "./cron.ts";
-import { Identity } from "./identity.ts";
-import { Journal } from "./journal.ts";
+import { Bud, type BudConfig } from "../bud.ts";
+import { CronMemory } from "./cron.memory.ts";
+import { GatewaySpider } from "./gateway.spider.ts";
+import { IdentityMemory } from "./identity.memory.ts";
+import { JournalMemory } from "./journal.memory.ts";
 import {
   WebContainerComputer,
   type WebContainerComputerOptions,
@@ -100,9 +101,10 @@ export const BrowserBud = {
 
     const dependencies = Layer.mergeAll(
       WebContainerComputer.layer(options.computer),
-      Identity.memory(),
-      Journal.memory(),
-      Cron.memory(),
+      IdentityMemory(),
+      JournalMemory(),
+      CronMemory(),
+      GatewaySpider(),
       sessions,
       model,
       LLM.ModelInfoDefault,

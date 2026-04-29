@@ -3,7 +3,6 @@ import {
   streamHostedProvider,
   type HostedProviderAvailability,
 } from "./llm-proxy.ts";
-import { BrowserBud, Bud, ProviderProxy, type BudService } from "@bud/bud";
 import * as LLM from "@bud/llm";
 import {
   type SessionHeader,
@@ -12,6 +11,12 @@ import {
   type SessionsService,
   type ThinkingLevel,
 } from "@bud/sessions";
+import {
+  BrowserBud,
+  Bud,
+  ProviderProxy,
+  type BudService,
+} from "@mirascope/bud";
 import { Effect, Stream } from "effect";
 
 export interface DemoMessage {

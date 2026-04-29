@@ -1,17 +1,15 @@
-import { computerTool } from "./computer-tool.ts";
-import { Cron, type CronService } from "./cron.ts";
-import { cronTool, identityTool, journalTool } from "./domain-tools.ts";
-import { Identity, type IdentityService } from "./identity.ts";
-import { Journal, type JournalService } from "./journal.ts";
 import {
   Agent,
   Compaction,
   System,
-  Tools,
   streamAgentTurn,
   type AgentStreamEvent,
 } from "@bud/agent";
-import { Computer, type ComputerService } from "@bud/computer";
+import { Computer, computerTool, type ComputerService } from "@bud/computer";
+import { Cron, cronTool, type CronService } from "@bud/cron";
+import { Gateway, type GatewayService } from "@bud/gateway";
+import { Identity, identityTool, type IdentityService } from "@bud/identity";
+import { Journal, journalTool, type JournalService } from "@bud/journal";
 import * as LLM from "@bud/llm";
 import {
   Sessions,
@@ -21,6 +19,7 @@ import {
   type SessionsService,
   type ThinkingLevel,
 } from "@bud/sessions";
+import { Tools } from "@bud/tools";
 import { Context, Effect, Layer, Stream } from "effect";
 
 export interface BudConfig {
@@ -59,6 +58,7 @@ export interface BudService {
   readonly identity: IdentityService;
   readonly journal: JournalService;
   readonly cron: CronService;
+  readonly gateway: GatewayService;
   readonly createSession: (
     options?: BudCreateSessionOptions,
   ) => Effect.Effect<SessionHeader, SessionError>;
@@ -76,7 +76,14 @@ export class Bud extends Context.Tag("@bud/bud/Bud")<Bud, BudService>() {
   ): Layer.Layer<
     Bud,
     never,
-    Computer | Identity | Journal | Cron | LLM.Model | LLM.ModelInfo | Sessions
+    | Computer
+    | Identity
+    | Journal
+    | Cron
+    | Gateway
+    | LLM.Model
+    | LLM.ModelInfo
+    | Sessions
   > {
     return Layer.effect(
       Bud,
@@ -86,6 +93,7 @@ export class Bud extends Context.Tag("@bud/bud/Bud")<Bud, BudService>() {
         const identity = yield* Identity;
         const journal = yield* Journal;
         const cron = yield* Cron;
+        const gateway = yield* Gateway;
         const model = yield* LLM.Model;
         const modelInfo = yield* LLM.ModelInfo;
         const computerTools =
@@ -117,6 +125,7 @@ export class Bud extends Context.Tag("@bud/bud/Bud")<Bud, BudService>() {
             | Identity
             | Journal
             | Cron
+            | Gateway
             | LLM.Model
             | LLM.ModelInfo
             | Sessions
@@ -131,6 +140,7 @@ export class Bud extends Context.Tag("@bud/bud/Bud")<Bud, BudService>() {
             Effect.provideService(Identity, identity),
             Effect.provideService(Journal, journal),
             Effect.provideService(Cron, cron),
+            Effect.provideService(Gateway, gateway),
             Effect.provideService(LLM.ModelInfo, modelInfo),
             Effect.provideService(LLM.Model, model),
             Effect.provide(agentSystem),
@@ -145,6 +155,7 @@ export class Bud extends Context.Tag("@bud/bud/Bud")<Bud, BudService>() {
               | Identity
               | Journal
               | Cron
+              | Gateway
               | LLM.Model
               | LLM.ModelInfo
               | Sessions
@@ -192,6 +203,7 @@ export class Bud extends Context.Tag("@bud/bud/Bud")<Bud, BudService>() {
           identity,
           journal,
           cron,
+          gateway,
           createSession,
           prompt: (options) => {
             const modelId = options.modelId ?? config.modelId;

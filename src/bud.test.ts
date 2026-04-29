@@ -1,7 +1,8 @@
 import { Bud } from "./bud.ts";
-import { Cron } from "./cron.ts";
-import { Identity } from "./identity.ts";
-import { Journal } from "./journal.ts";
+import { CronMemory } from "./spiders/cron.memory.ts";
+import { GatewaySpider } from "./spiders/gateway.spider.ts";
+import { IdentityMemory } from "./spiders/identity.memory.ts";
+import { JournalMemory } from "./spiders/journal.memory.ts";
 import {
   Computer,
   makeComputerError,
@@ -59,9 +60,10 @@ function makeLayer(provider: LLM.ProviderService): Layer.Layer<Bud | Sessions> {
         sessions,
         model,
         LLM.ModelInfoDefault,
-        Identity.memory(),
-        Journal.memory(),
-        Cron.memory(),
+        IdentityMemory(),
+        JournalMemory(),
+        CronMemory(),
+        GatewaySpider(),
         Layer.succeed(Computer, makeComputer()),
       ),
     ),

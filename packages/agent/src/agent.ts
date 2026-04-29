@@ -1,6 +1,5 @@
 import { Compaction } from "./compaction.ts";
 import { System, systemPromptText } from "./system.ts";
-import { Tools } from "./tools.ts";
 import * as LLM from "@bud/llm";
 import {
   Sessions,
@@ -9,6 +8,7 @@ import {
   type SessionId,
   type SessionsService,
 } from "@bud/sessions";
+import { Tools } from "@bud/tools";
 import { Effect } from "effect";
 
 export interface AgentConfig {

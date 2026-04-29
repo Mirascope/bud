@@ -6,8 +6,6 @@ export {
   type SystemContext,
   type SystemService,
 } from "./system.ts";
-export { Tools, type ToolsService } from "./tools.ts";
-
 export {
   AgentUtils,
   DEFAULT_AUTOCOMPACT_BUFFER_TOKENS,

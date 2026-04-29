@@ -3,6 +3,7 @@
   "compilerOptions": {
     "noEmit": true,
     "paths": {
+      "@mirascope/bud": ["./src/index.ts"],
       "@bud/*": ["./packages/*/src"]
     }
   },

@@ -40,6 +40,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@demo": fileURLToPath(new URL("./src", import.meta.url)),
+      "@mirascope/bud": fileURLToPath(new URL("../src", import.meta.url)),
     },
   },
   plugins: [crossOriginIsolation(), tanstackStart(), react(), tailwindcss()],

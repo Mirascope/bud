@@ -1,7 +1,6 @@
 import { Agent } from "./agent.ts";
 import { Compaction } from "./compaction.ts";
 import { System } from "./system.ts";
-import { Tools } from "./tools.ts";
 import {
   Computer,
   runComputerCli,
@@ -15,6 +14,7 @@ import * as LLM from "@bud/llm";
 import { InMemory } from "@bud/object-storage";
 import { Sessions, SessionsLocalStorage } from "@bud/sessions";
 import { expect, it } from "@bud/testing";
+import { Tools } from "@bud/tools";
 import { Effect, Layer, Schema, Stream } from "effect";
 
 function makeResponse(
