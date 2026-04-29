@@ -1403,7 +1403,10 @@ function HomePage() {
                     )
                   }
                   id="chat-composer"
-                  onChange={(event) => setDraft(event.target.value)}
+                  onChange={(event) => {
+                    resizeTextarea(event.currentTarget);
+                    setDraft(event.target.value);
+                  }}
                   onKeyDown={handleKeyDown}
                   placeholder="Message Bud"
                   ref={textareaRef}
@@ -2332,7 +2335,16 @@ function useAutoResize(
     const element = ref.current;
     if (!element) return;
 
-    element.style.height = "auto";
-    element.style.height = `${element.scrollHeight}px`;
+    resizeTextarea(element);
   }, [ref, value]);
+}
+
+const TEXTAREA_MAX_HEIGHT = 192;
+
+function resizeTextarea(element: HTMLTextAreaElement) {
+  element.style.height = "auto";
+  const nextHeight = Math.min(element.scrollHeight, TEXTAREA_MAX_HEIGHT);
+  element.style.height = `${nextHeight}px`;
+  element.style.overflowY =
+    element.scrollHeight > TEXTAREA_MAX_HEIGHT ? "auto" : "hidden";
 }
